@@ -306,19 +306,19 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
     }, [file]);
 
     return (
-      <div className="flex items-center gap-3 p-2 border border-orange-200 bg-orange-50 rounded">
+      <div className="flex items-center gap-3 p-3 border border-[#d4af37]/30 bg-[#d4af37]/10 rounded-lg">
         {preview ? (
-          <img src={preview} alt="Preview" className="w-12 h-12 object-cover rounded" />
+          <img src={preview} alt="Preview" className="w-12 h-12 object-cover rounded border border-[#d4af37]/20" />
         ) : (
-          <div className="w-12 h-12 bg-[#d4af37]/10 rounded flex items-center justify-center">
-            <Upload size={20} className="text-gray-400" />
+          <div className="w-12 h-12 bg-[#1a1a1a] rounded flex items-center justify-center border border-[#d4af37]/20">
+            <Upload size={20} className="text-[#b8a070]" />
           </div>
         )}
         <div className="flex-1">
-          <div className="text-sm text-gray-900 truncate max-w-[250px]">{file.name}</div>
-          <div className="text-xs text-orange-600">Will be uploaded on save</div>
+          <div className="text-sm text-[#f5e6d3] truncate max-w-[250px]">{file.name}</div>
+          <div className="text-xs text-[#d4af37]">Will be uploaded on save</div>
         </div>
-        <button type="button" onClick={onRemove} className="text-red-500 hover:text-red-700">
+        <button type="button" onClick={onRemove} className="text-red-400 hover:text-red-300 transition-colors">
           <Trash2 size={16} />
         </button>
       </div>
@@ -336,18 +336,18 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
     selectedTags: string[];
     onToggle: (tag: string) => void;
   }) => (
-    <div className="space-y-2">
-      <label className="block text-sm font-medium text-[#f5e6d3]">{title}</label>
+    <div className="space-y-3">
+      <label className="block text-sm font-medium text-[#d4af37] uppercase tracking-wide">{title}</label>
       <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
         {options.map((option) => (
           <button
             key={option}
             type="button"
             onClick={() => onToggle(option)}
-            className={`px-3 py-1 text-xs rounded-full border transition-colors ${
+            className={`px-3 py-1.5 text-xs rounded-full border transition-all ${
               selectedTags.includes(option)
-                ? 'bg-primary/20 text-primary border-primary/30 font-semibold'
-                : 'bg-gray-100 text-[#f5e6d3] border-[#d4af37]/20 hover:bg-gray-100'
+                ? 'bg-[#d4af37] text-[#0a0a0a] border-[#d4af37] font-semibold shadow-lg shadow-[#d4af37]/20'
+                : 'bg-[#1a1a1a] text-[#f5e6d3] border-[#d4af37]/20 hover:border-[#d4af37]/40 hover:bg-[#1a1a1a]'
             }`}
           >
             {option}
@@ -360,65 +360,68 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
   const availableSizesToAdd = SIZE_OPTIONS.filter(size => !formData.sizes[size]);
 
   return (
-    <div className="h-full flex flex-col">
-      <form onSubmit={handleSubmit} className="flex-1 space-y-6 overflow-y-auto">
+    <div className="h-full flex flex-col bg-[#0a0a0a]">
+      <form onSubmit={handleSubmit} className="flex-1 space-y-6 overflow-y-auto px-1">
+        {/* Basic Information */}
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold tracking-wider text-gray-900">BASIC INFORMATION</h3>
+          <h3 className="text-lg font-semibold tracking-wider text-[#d4af37] uppercase border-b border-[#d4af37]/20 pb-2">Basic Information</h3>
          
           <div>
-            <label className="block text-sm font-medium text-[#f5e6d3] mb-1">
+            <label className="block text-sm font-medium text-[#d4af37] mb-2 uppercase tracking-wide">
               Product Name
             </label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => handleInputChange('name', e.target.value)}
-              className="w-full p-3 border border-[#d4af37]/20 text-sm focus:border-transparent"
+              className="w-full p-3 bg-[#1a1a1a] border border-[#d4af37]/20 rounded-lg text-[#f5e6d3] placeholder-[#b8a070] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent transition-all"
+              placeholder="Enter product name"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-[#f5e6d3] mb-1">
+            <label className="block text-sm font-medium text-[#d4af37] mb-2 uppercase tracking-wide">
               Description
             </label>
             <textarea
               value={formData.description}
               onChange={(e) => handleInputChange('description', e.target.value)}
               rows={4}
-              className="w-full p-3 border border-[#d4af37]/20 text-sm focus:border-transparent"
+              className="w-full p-3 bg-[#1a1a1a] border border-[#d4af37]/20 rounded-lg text-[#f5e6d3] placeholder-[#b8a070] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent transition-all resize-none"
+              placeholder="Enter product description"
               required
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-[#f5e6d3] mb-1">
+              <label className="block text-sm font-medium text-[#d4af37] mb-2 uppercase tracking-wide">
                 Perfume Type
               </label>
               <select
                 value={formData.perfumeType}
                 onChange={(e) => handleInputChange('perfumeType', e.target.value as "Basic" | "Premium")}
-                className="w-full p-3 border border-[#d4af37]/20 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full p-3 bg-[#1a1a1a] border border-[#d4af37]/20 rounded-lg text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent transition-all"
                 required
               >
-                <option value="Basic">Basic</option>
-                <option value="Premium">Premium</option>
+                <option value="Basic" className="bg-[#1a1a1a]">Basic</option>
+                <option value="Premium" className="bg-[#1a1a1a]">Premium</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-[#f5e6d3] mb-1">
+              <label className="block text-sm font-medium text-[#d4af37] mb-2 uppercase tracking-wide">
                 Category
               </label>
               <select
                 value={formData.categoryId}
                 onChange={(e) => handleInputChange('categoryId', e.target.value)}
-                className="w-full p-3 border border-[#d4af37]/20 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full p-3 bg-[#1a1a1a] border border-[#d4af37]/20 rounded-lg text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent transition-all"
               >
-                <option value="">Select a category</option>
+                <option value="" className="bg-[#1a1a1a]">Select a category</option>
                 {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
+                  <option key={category.id} value={category.id} className="bg-[#1a1a1a]">
                     {category.name}
                   </option>
                 ))}
@@ -426,35 +429,36 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
             </div>
           </div>
 
-          <div className="flex items-center">
+          <div className="flex items-center p-3 bg-[#1a1a1a] border border-[#d4af37]/20 rounded-lg">
             <input
               type="checkbox"
               id="isActive"
               checked={formData.isActive}
               onChange={(e) => handleInputChange('isActive', e.target.checked)}
-              className="h-4 w-4 text-primary focus:ring-primary border-[#d4af37]/20 rounded"
+              className="h-4 w-4 accent-[#d4af37] rounded"
             />
-            <label htmlFor="isActive" className="ml-2 block text-sm text-gray-900">
+            <label htmlFor="isActive" className="ml-3 block text-sm text-[#f5e6d3]">
               Product is active
             </label>
           </div>
         </div>
 
+        {/* Product Images */}
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold tracking-wider text-gray-900">PRODUCT IMAGES</h3>
+          <h3 className="text-lg font-semibold tracking-wider text-[#d4af37] uppercase border-b border-[#d4af37]/20 pb-2">Product Images</h3>
          
           <div className="space-y-2">
             {formData.images.map((image, index) => (
-              <div key={`url-${index}`} className="flex items-center gap-3 p-2 border border-green-200 bg-green-50 rounded">
-                <img src={image} alt={`Product ${index + 1}`} className="w-12 h-12 object-cover rounded" />
+              <div key={`url-${index}`} className="flex items-center gap-3 p-3 border border-green-500/30 bg-green-900/20 rounded-lg">
+                <img src={image} alt={`Product ${index + 1}`} className="w-12 h-12 object-cover rounded border border-[#d4af37]/20" />
                 <div className="flex-1">
-                  <div className="text-sm text-gray-900 truncate max-w-[250px]">{image}</div>
-                  <div className="text-xs text-green-600">Image URL ready</div>
+                  <div className="text-sm text-[#f5e6d3] truncate max-w-[250px]">{image}</div>
+                  <div className="text-xs text-green-400">Image URL ready</div>
                 </div>
                 <button
                   type="button"
                   onClick={() => handleRemoveImageUrl(index)}
-                  className="text-red-500 hover:text-red-700"
+                  className="text-red-400 hover:text-red-300 transition-colors"
                 >
                   <Trash2 size={16} />
                 </button>
@@ -472,7 +476,7 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
 
           <div className="space-y-3">
             <div>
-              <label className="block text-sm font-medium text-[#f5e6d3] mb-2">Select Image Files</label>
+              <label className="block text-sm font-medium text-[#d4af37] mb-2 uppercase tracking-wide">Select Image Files</label>
               <input
                 type="file"
                 accept="image/jpeg,image/jpg,image/png,image/webp"
@@ -483,38 +487,39 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
                     e.target.value = '';
                   }
                 }}
-                className="w-full p-2 border border-[#d4af37]/20 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full p-2 bg-[#1a1a1a] border border-[#d4af37]/20 rounded-lg text-[#f5e6d3] file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-[#d4af37] file:text-[#0a0a0a] file:font-semibold hover:file:bg-[#d4af37]/90 transition-all"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-[#b8a070] mt-2">
                 Supported formats: JPEG, PNG, WebP. Max size: 5MB. Files will be uploaded when you save the product.
               </p>
             </div>
 
-            <div className="border-t pt-3">
-              <label className="block text-sm font-medium text-[#f5e6d3] mb-2">Or Add Image URL</label>
+            <div className="border-t border-[#d4af37]/20 pt-3">
+              <label className="block text-sm font-medium text-[#d4af37] mb-2 uppercase tracking-wide">Or Add Image URL</label>
               <div className="flex gap-2">
                 <input
                   type="url"
                   value={newImageUrl}
                   onChange={(e) => setNewImageUrl(e.target.value)}
                   placeholder="Enter image URL"
-                  className="flex-1 p-2 border border-[#d4af37]/20 text-sm focus:border-transparent"
+                  className="flex-1 p-3 bg-[#1a1a1a] border border-[#d4af37]/20 rounded-lg text-[#f5e6d3] placeholder-[#b8a070] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent transition-all"
                 />
                 <button
                   type="button"
                   onClick={handleAddImageUrl}
                   disabled={!newImageUrl.trim()}
-                  className="px-4 py-2 bg-primary text-white hover:bg-green-700 disabled:opacity-50"
+                  className="px-4 py-2 bg-[#d4af37] text-[#0a0a0a] rounded-lg hover:bg-[#d4af37]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
-                  <Plus size={16} />
+                  <Plus size={20} />
                 </button>
               </div>
             </div>
           </div>
         </div>
 
+        {/* Sizes, Pricing & Stock */}
         <div className="space-y-4">
-          <h3 className="text-lg font-medium text-gray-900">Sizes, Pricing & Stock</h3>
+          <h3 className="text-lg font-semibold tracking-wider text-[#d4af37] uppercase border-b border-[#d4af37]/20 pb-2">Sizes, Pricing & Stock</h3>
           <p className="text-sm text-[#b8a070]">Add at least one size with its price and stock</p>
          
           <div className="space-y-3">
@@ -522,21 +527,21 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
               const stock = formData.stocks[size] || 0;
              
               return (
-                <div key={size} className="flex items-center gap-3 p-3 border border-[#d4af37]/20">
+                <div key={size} className="flex items-center gap-3 p-3 bg-[#1a1a1a] border border-[#d4af37]/20 rounded-lg">
                   <div className="flex-1">
-                    <div className="font-medium leading-none">{size}ml</div>
+                    <div className="font-medium text-[#d4af37]">{size}ml</div>
                   </div>
                  
-                  <div className="flex items-center gap-2 justify-center">
+                  <div className="flex items-center gap-3">
                     <div>
-                      <label className="block text-xs text-[#b8a070] mb-1">Price</label>
+                      <label className="block text-xs text-[#b8a070] mb-1 uppercase">Price</label>
                       <select
                         value={price}
                         onChange={(e) => handleSizePriceChange(size, parseFloat(e.target.value))}
-                        className="w-24 p-2 text-sm border border-[#d4af37]/20"
+                        className="w-24 p-2 text-sm bg-[#0a0a0a] border border-[#d4af37]/20 rounded text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                       >
                         {PRICE_OPTIONS.map(priceOption => (
-                          <option key={priceOption} value={priceOption}>
+                          <option key={priceOption} value={priceOption} className="bg-[#1a1a1a]">
                             ₱{priceOption}
                           </option>
                         ))}
@@ -544,20 +549,20 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
                     </div>
                    
                     <div>
-                      <label className="block text-xs text-[#b8a070] mb-1">Stock</label>
+                      <label className="block text-xs text-[#b8a070] mb-1 uppercase">Stock</label>
                       <input
                         type="number"
                         min="0"
                         value={stock}
                         onChange={(e) => handleSizeStockChange(size, parseInt(e.target.value) || 0)}
-                        className="w-20 p-2 text-sm border border-[#d4af37]/20"
+                        className="w-20 p-2 text-sm bg-[#0a0a0a] border border-[#d4af37]/20 rounded text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                       />
                     </div>
                    
                     <button
                       type="button"
                       onClick={() => handleRemoveSize(size)}
-                      className="text-white hover:bg-red-400 bg-red-600 rounded-full mt-4 p-1"
+                      className="text-white bg-red-600 hover:bg-red-500 rounded-full p-1.5 transition-colors mt-5"
                     >
                       <Minus size={16} />
                     </button>
@@ -570,7 +575,7 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
           {availableSizesToAdd.length > 0 && (
             <div className="flex gap-2">
               <select
-                className="flex-1 p-2 border border-[#d4af37]/20 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="flex-1 p-3 bg-[#1a1a1a] border border-[#d4af37]/20 rounded-lg text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent transition-all"
                 onChange={(e) => {
                   if (e.target.value) {
                     handleAddSize(e.target.value);
@@ -579,9 +584,9 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
                 }}
                 defaultValue=""
               >
-                <option value="">Select size to add...</option>
+                <option value="" className="bg-[#1a1a1a]">Select size to add...</option>
                 {availableSizesToAdd.map(size => (
-                  <option key={size} value={size}>
+                  <option key={size} value={size} className="bg-[#1a1a1a]">
                     {size}ml
                   </option>
                 ))}
@@ -590,14 +595,15 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
           )}
 
           {Object.keys(formData.sizes).length === 0 && (
-            <div className="text-sm text-amber-600 bg-amber-50 border border-amber-200 p-3 rounded">
+            <div className="text-sm text-[#d4af37] bg-[#d4af37]/10 border border-[#d4af37]/30 p-3 rounded-lg">
               Please add at least one size to continue
             </div>
           )}
         </div>
 
+        {/* Product Tags */}
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold tracking-wider text-gray-900">PRODUCT TAGS</h3>
+          <h3 className="text-lg font-semibold tracking-wider text-[#d4af37] uppercase border-b border-[#d4af37]/20 pb-2">Product Tags</h3>
          
           <TagSelector
             title="Gender Tags"
@@ -637,11 +643,12 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
         <div className="h-[30px]" />
       </form>
 
-      <div className="flex-shrink-0 pt-4 border-t border-[#d4af37]/20 flex justify-end gap-3">
+      {/* Action Buttons */}
+      <div className="flex-shrink-0 pt-4 border-t border-[#d4af37]/20 flex justify-end gap-3 bg-[#0a0a0a]">
         <button
           type="button"
           onClick={onClose}
-          className="px-4 py-2 text-[#f5e6d3] border border-[#d4af37]/20 uppercase text-sm hover:bg-gray-100"
+          className="px-6 py-2.5 text-[#f5e6d3] border-2 border-[#d4af37]/30 rounded-lg uppercase text-sm font-semibold hover:bg-[#1a1a1a] hover:border-[#d4af37] transition-all disabled:opacity-50"
           disabled={isLoading}
         >
           Cancel
@@ -650,10 +657,20 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
           type="submit"
           onClick={handleSubmit}
           disabled={isLoading || isUploading || Object.keys(formData.sizes).length === 0}
-          className="px-4 py-2 bg-primary text-white uppercase hover:bg-primary/50 transition text-sm leading-[2px] disabled:opacity-50 flex items-center gap-2"
+          className="px-6 py-2.5 bg-[#d4af37] text-[#0a0a0a] rounded-lg uppercase font-semibold hover:bg-[#d4af37]/90 transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-[#d4af37]/20"
         >
-          {isLoading && !isUploading && 'Creating...'}
-          {isUploading && 'Uploading Images...'}
+          {isLoading && !isUploading && (
+            <>
+              <div className="w-4 h-4 border-2 border-[#0a0a0a] border-t-transparent rounded-full animate-spin"></div>
+              Creating...
+            </>
+          )}
+          {isUploading && (
+            <>
+              <div className="w-4 h-4 border-2 border-[#0a0a0a] border-t-transparent rounded-full animate-spin"></div>
+              Uploading Images...
+            </>
+          )}
           {!isLoading && !isUploading && 'Create Product'}
         </button>
       </div>
