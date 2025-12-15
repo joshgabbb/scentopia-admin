@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { CategoryData } from "../route";
+// ✅ ADD THIS IMPORT
+import { logProductUpdate, logInventoryUpdate, logAuditAction } from "@/lib/audit-logger";
 
 export async function GET(
   request: NextRequest,
@@ -128,6 +130,20 @@ export async function PATCH(
     const body = await request.json();
     const updateData = { ...body };
 
+    // ✅ GET OLD PRODUCT DATA BEFORE UPDATING (FOR AUDIT LOG)
+    const { data: oldProduct } = await supabase
+      .from("products")
+      .select("*")
+      .eq("id", productId)
+      .single();
+
+    if (!oldProduct) {
+      return NextResponse.json(
+        { success: false, error: "Product not found" },
+        { status: 404 }
+      );
+    }
+
     if (updateData.price) {
       updateData.price = Number(updateData.price);
     }
@@ -174,6 +190,38 @@ export async function PATCH(
         );
       }
       throw error;
+    }
+
+    // ✅ LOG AUDIT ACTIONS (AFTER SUCCESSFUL UPDATE)
+    try {
+      // If stocks changed, log as inventory update
+      if (updateData.stocks && JSON.stringify(oldProduct.stocks) !== JSON.stringify(updateData.stocks)) {
+        await logInventoryUpdate(
+          productId,
+          oldProduct.stocks,
+          updateData.stocks,
+          request
+        );
+        console.log("✅ Inventory update logged for product:", productId);
+      }
+
+      // If other fields changed (name, price, etc.), log as product update
+      const otherFieldsChanged = Object.keys(updateData).some(
+        key => key !== 'stocks' && key !== 'updated_at' && updateData[key] !== undefined
+      );
+
+      if (otherFieldsChanged) {
+        await logProductUpdate(
+          productId,
+          oldProduct,
+          data,
+          request
+        );
+        console.log("✅ Product update logged for product:", productId);
+      }
+    } catch (logError) {
+      // Don't fail the request if logging fails
+      console.error("⚠️ Audit logging error:", logError);
     }
 
     const totalStock = data.stocks
@@ -248,6 +296,13 @@ export async function DELETE(
       );
     }
 
+    // ✅ GET PRODUCT DATA BEFORE DELETING (FOR AUDIT LOG)
+    const { data: product } = await supabase
+      .from("products")
+      .select("*")
+      .eq("id", productId)
+      .single();
+
     await supabase.from("cart").delete().eq("product_id", productId);
     await supabase.from("wishlists").delete().eq("product_id", productId);
     await supabase
@@ -280,6 +335,22 @@ export async function DELETE(
 
     if (error) {
       throw error;
+    }
+
+    // ✅ LOG PRODUCT DELETION (AFTER SUCCESSFUL DELETE)
+    try {
+      await logAuditAction({
+        action: 'delete',
+        entityType: 'product',
+        entityId: productId,
+        changes: {
+          old: product
+        }
+      }, request);
+      console.log("✅ Product deletion logged for product:", productId);
+    } catch (logError) {
+      // Don't fail the request if logging fails
+      console.error("⚠️ Audit logging error:", logError);
     }
 
     return NextResponse.json({

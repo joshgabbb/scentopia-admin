@@ -1,5 +1,5 @@
-// app/api/admin/reports/inventory-alerts/route.ts
-// COMPLETE CORRECTED VERSION
+// app/api/admin/reports/inventory-alerts/export/route.ts
+// CORRECTED VERSION - Respects filter parameter
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
@@ -10,70 +10,29 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const filterType = searchParams.get("filter") || "all";
 
-    console.log("=== INVENTORY ALERTS API ===");
+    console.log("=== EXPORT INVENTORY ALERTS ===");
     console.log("Filter:", filterType);
 
     // Get all products
-    const { data: products, error: productsError } = await supabase
+    const { data: products } = await supabase
       .from('products')
       .select('*')
       .eq('is_active', true);
 
-    if (productsError) {
-      console.error("Products error:", productsError);
-      return NextResponse.json({
-        success: false,
-        error: productsError.message
-      }, { status: 500 });
-    }
-
-    console.log("Total active products:", products?.length || 0);
-
-    if (!products || products.length === 0) {
-      return NextResponse.json({
-        success: true,
-        data: {
-          alerts: [],
-          summary: {
-            total: 0,
-            critical: 0,
-            high: 0,
-            medium: 0,
-            low: 0,
-            alertTypes: {
-              lowStock: 0,
-              fastMoving: 0,
-              slowMoving: 0,
-              stockoutRisk: 0
-            }
-          }
-        }
-      });
+    if (!products) {
+      return new NextResponse("No data to export", { status: 404 });
     }
 
     // Calculate 30-day velocity
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const { data: recentOrderItems, error: orderItemsError } = await supabase
+    const { data: recentOrderItems } = await supabase
       .from('order_items')
-      .select(`
-        *,
-        orders (
-          id,
-          order_status,
-          created_at
-        )
-      `)
+      .select(`*, orders (id, order_status, created_at)`)
       .gte('created_at', thirtyDaysAgo.toISOString());
 
-    console.log("Order items (last 30 days):", recentOrderItems?.length || 0);
-
-    if (orderItemsError) {
-      console.error("Order items error:", orderItemsError);
-    }
-
-    // Calculate velocity for each product
+    // Calculate velocity
     const productVelocities: { [key: string]: number } = {};
     (recentOrderItems || []).forEach((item: any) => {
       const validStatuses = ['Delivered', 'Confirmed', 'Processing', 'Pending', 'Shipped'];
@@ -85,23 +44,15 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    console.log("Products with sales:", Object.keys(productVelocities).length);
-
-    // Create alerts for each product
+    // Create alerts
     const allAlerts = products.map(product => {
-      // Calculate total stock from stocks object
       const stocksObj = product.stocks || {};
-      const totalStock = Object.values(stocksObj).reduce(
-        (sum: number, qty: any) => sum + (qty || 0), 
-        0
-      );
+      const totalStock = Object.values(stocksObj).reduce((sum: number, qty: any) => sum + (qty || 0), 0);
 
-      // Get 30-day sales
       const unitsSoldLast30Days = productVelocities[product.id] || 0;
       const velocity = unitsSoldLast30Days / 30;
       const daysUntilStockout = velocity > 0 ? Math.floor(totalStock / velocity) : 999;
 
-      // Determine severity and type
       let severity: "critical" | "high" | "medium" | "low" = "low";
       let type: "stockout_risk" | "low_stock" | "fast_moving" | "slow_moving" = "low_stock";
       let message = "";
@@ -140,27 +91,19 @@ export async function GET(request: NextRequest) {
         message = `Stock level normal: ${totalStock} units.`;
       }
 
-      // Get first image from images array
-      const productImage = Array.isArray(product.images) && product.images.length > 0
-        ? product.images[0]
-        : null;
-
       return {
-        id: product.id,
-        productId: product.id,
-        productName: product.name,
-        productImage,
-        currentStock: totalStock,
+        name: product.name,
+        stock: totalStock,
+        velocity: velocity.toFixed(2),
+        daysLeft: daysUntilStockout === 999 ? 'N/A' : daysUntilStockout,
+        unitsSold30d: unitsSoldLast30Days,
         severity,
         type,
-        message,
-        velocity: parseFloat(velocity.toFixed(2)),
-        daysUntilStockout,
-        unitsSoldLast30Days
+        message
       };
     });
 
-    // Filter based on type
+    // FIX: Apply filter based on type parameter
     let filteredAlerts = allAlerts;
     if (filterType === "low_stock") {
       filteredAlerts = allAlerts.filter(a => a.type === "low_stock");
@@ -172,52 +115,38 @@ export async function GET(request: NextRequest) {
       filteredAlerts = allAlerts.filter(a => a.type === "stockout_risk");
     }
 
+    console.log("Total alerts:", allAlerts.length);
+    console.log("Filtered alerts:", filteredAlerts.length);
+
     // Sort by severity
-    const severityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+    const severityOrder: any = { critical: 0, high: 1, medium: 2, low: 3 };
     filteredAlerts.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
 
-    // Calculate summary
-    const summary = {
-      total: allAlerts.length,
-      critical: allAlerts.filter(a => a.severity === "critical").length,
-      high: allAlerts.filter(a => a.severity === "high").length,
-      medium: allAlerts.filter(a => a.severity === "medium").length,
-      low: allAlerts.filter(a => a.severity === "low").length,
-      alertTypes: {
-        lowStock: allAlerts.filter(a => a.type === "low_stock").length,
-        fastMoving: allAlerts.filter(a => a.type === "fast_moving").length,
-        slowMoving: allAlerts.filter(a => a.type === "slow_moving").length,
-        stockoutRisk: allAlerts.filter(a => a.type === "stockout_risk").length
-      }
-    };
+    // Create CSV
+    const headers = ['Product Name', 'Current Stock', 'Velocity (units/day)', 'Days Until Stockout', 'Units Sold (30d)', 'Severity', 'Type', 'Message'];
+    const rows = filteredAlerts.map(a => [
+      `"${a.name}"`,
+      a.stock,
+      a.velocity,
+      a.daysLeft,
+      a.unitsSold30d,
+      a.severity,
+      a.type,
+      `"${a.message}"`
+    ]);
 
-    console.log("Summary:", {
-      total: summary.total,
-      critical: summary.critical,
-      high: summary.high,
-      medium: summary.medium,
-      low: summary.low
-    });
-    console.log("Alert types:", summary.alertTypes);
-    console.log("Filtered alerts shown:", filteredAlerts.length);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        alerts: filteredAlerts,
-        summary
+    return new NextResponse(csv, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/csv',
+        'Content-Disposition': `attachment; filename="inventory-alerts-${filterType}-${new Date().toISOString().split('T')[0]}.csv"`
       }
     });
 
   } catch (error) {
-    console.error("Inventory alerts error:", error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: "Failed to fetch inventory alerts",
-        details: error instanceof Error ? error.message : "Unknown error"
-      },
-      { status: 500 }
-    );
+    console.error("Export error:", error);
+    return new NextResponse("Export failed", { status: 500 });
   }
 }
