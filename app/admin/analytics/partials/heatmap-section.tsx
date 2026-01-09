@@ -14,46 +14,51 @@ export default function HeatmapSection({ data: propData }: HeatmapSectionProps) 
   const mapRef = useRef<PhilippineMapRef>(null);
   const [selectedRegion, setSelectedRegion] = useState<RegionType>('all');
 
-  // Fallback dummy data
+  // Fallback dummy data (order counts)
   const fallbackData = {
-    "PH-CEB": 85,
-    "PH-MNL": 92,
-    "PH-SUR": 45,
-    "PH-DAV": 65,
-    "PH-ILI": 78,
-    "PH-LAG": 55,
-    "PH-CAV": 88,
-    "PH-BUL": 42,
-    "PH-PAM": 73,
-    "PH-BTG": 61,
-    "PH-RIZ": 82,
-    "PH-QUE": 38,
-    "PH-ALB": 69,
-    "PH-CAS": 76,
-    "PH-LEY": 52,
-    "PH-BOH": 84,
-    "PH-NEC": 47,
-    "PH-ILN": 91,
-    "PH-ZMB": 36,
-    "PH-TAR": 58
+    "PH-CEB": 150,
+    "PH-MNL": 320,
+    "PH-SUR": 25,
+    "PH-DAV": 85,
+    "PH-ILI": 45,
+    "PH-LAG": 180,
+    "PH-CAV": 210,
+    "PH-BUL": 35,
+    "PH-PAM": 65,
+    "PH-BTG": 55,
+    "PH-RIZ": 120,
+    "PH-QUE": 40,
+    "PH-ALB": 30,
+    "PH-CAS": 28,
+    "PH-LEY": 22,
+    "PH-BOH": 95,
+    "PH-NEC": 18,
+    "PH-ILN": 12,
+    "PH-ZMB": 8,
+    "PH-TAR": 48
   };
 
-  // Use the heatmap hook
-  const { 
-    data: heatmapData, 
-    setColorFunction, 
-    loading, 
+  // Use the heatmap hook - don't pass fallbackData to prevent it from being used
+  const {
+    data: heatmapData,
+    setColorFunction,
+    loading,
     error,
-    refreshData 
+    refreshData
   } = useHeatmap(propData, {
     autoFetch: !propData, // Only auto-fetch if no prop data provided
     apiEndpoint: '/api/admin/analytics/heatmap',
-    fallbackData: fallbackData
+    fallbackData: {} // Empty - we'll handle fallback in the component only on error
   });
 
   const provinceData = useMemo(() => {
-    return heatmapData || fallbackData;
-  }, [heatmapData]);
+    // Only use fallback data if there's an error AND no data was fetched
+    if (error && Object.keys(heatmapData || {}).length === 0) {
+      return fallbackData;
+    }
+    // During loading or with real data, use heatmapData (or empty object)
+    return heatmapData && Object.keys(heatmapData).length > 0 ? heatmapData : {};
+  }, [heatmapData, error, fallbackData]);
 
   const filteredData = useMemo(() => {
     const regionProvinceIds = getProvincesByRegion(selectedRegion);
@@ -63,15 +68,21 @@ export default function HeatmapSection({ data: propData }: HeatmapSectionProps) 
   }, [selectedRegion, provinceData]);
 
   const statistics = useMemo(() => {
-    if (filteredData.length === 0) return { total: 0, average: 0, highest: 0, lowest: 0 };
-    
+    if (filteredData.length === 0) return { total: 0, average: 0, highest: 0, lowest: 0, totalOrders: 0, lowThreshold: 0, highThreshold: 0 };
+
     const values = filteredData.map(([, value]) => value);
     const total = filteredData.length;
-    const average = Math.round(values.reduce((sum, val) => sum + val, 0) / total);
+    const totalOrders = values.reduce((sum, val) => sum + val, 0);
+    const average = Math.round(totalOrders / total);
     const highest = Math.max(...values);
     const lowest = Math.min(...values);
-    
-    return { total, average, highest, lowest };
+
+    // Dynamic thresholds based on data range
+    const range = highest - lowest;
+    const lowThreshold = Math.round(lowest + range * 0.33);
+    const highThreshold = Math.round(lowest + range * 0.66);
+
+    return { total, average, highest, lowest, totalOrders, lowThreshold, highThreshold };
   }, [filteredData]);
 
   const sortedData = useMemo(() => {
@@ -79,7 +90,10 @@ export default function HeatmapSection({ data: propData }: HeatmapSectionProps) 
   }, [filteredData]);
 
   const getColorForValue = (value: number) => {
-    return value > 80 ? "#ef4444" : value > 50 ? "#f97316" : "#22c55e";
+    const { lowThreshold, highThreshold } = statistics;
+    if (value > highThreshold) return "#ef4444"; // Red - high orders
+    if (value > lowThreshold) return "#f97316";  // Orange - medium orders
+    return "#22c55e";                             // Green - low orders
   };
 
   // Handle map loaded - pass color function to the hook
@@ -123,10 +137,10 @@ export default function HeatmapSection({ data: propData }: HeatmapSectionProps) 
 
   const getMapTitle = () => {
     switch (selectedRegion) {
-      case 'luzon': return 'HEATMAP SALES - LUZON';
-      case 'visayas': return 'HEATMAP SALES - VISAYAS';
-      case 'mindanao': return 'HEATMAP SALES - MINDANAO';
-      default: return 'HEATMAP SALES';
+      case 'luzon': return 'ORDERS BY PROVINCE - LUZON';
+      case 'visayas': return 'ORDERS BY PROVINCE - VISAYAS';
+      case 'mindanao': return 'ORDERS BY PROVINCE - MINDANAO';
+      default: return 'ORDERS BY PROVINCE';
     }
   };
 
@@ -176,7 +190,7 @@ export default function HeatmapSection({ data: propData }: HeatmapSectionProps) 
             {/* Region Selector */}
             <div>
               <h2 className="text-2xl font-semibold text-[#d4af37] uppercase tracking-[2px]">
-                SALES DATA
+                ORDER DATA
               </h2>
               <label className="block text-sm font-medium text-[#b8a070] mb-2 mt-4">
                 Select Region
@@ -196,38 +210,38 @@ export default function HeatmapSection({ data: propData }: HeatmapSectionProps) 
             {/* Statistics */}
             <div className="bg-[#1a1a1a] border border-[#d4af37]/20 p-3 grid grid-cols-2 gap-3">
               <div>
-                <div className="text-sm text-[#b8a070]">Total Provinces</div>
+                <div className="text-sm text-[#b8a070]">Total Orders</div>
+                <div className="text-xl font-bold text-[#d4af37]">{statistics.totalOrders}</div>
+              </div>
+              <div>
+                <div className="text-sm text-[#b8a070]">Provinces with Data</div>
                 <div className="text-xl font-bold text-[#d4af37]">{statistics.total}</div>
               </div>
               <div>
-                <div className="text-sm text-[#b8a070]">Average Score</div>
+                <div className="text-sm text-[#b8a070]">Average per Province</div>
                 <div className="text-xl font-bold text-[#d4af37]">{statistics.average}</div>
               </div>
               <div>
-                <div className="text-sm text-[#b8a070]">Highest Score</div>
-                <div className="text-xl font-bold text-[#d4af37]">{statistics.highest}</div>
-              </div>
-              <div>
-                <div className="text-sm text-[#b8a070]">Lowest Score</div>
-                <div className="text-xl font-bold text-[#d4af37]">{statistics.lowest}</div>
+                <div className="text-sm text-[#b8a070]">Highest / Lowest</div>
+                <div className="text-xl font-bold text-[#d4af37]">{statistics.highest} / {statistics.lowest}</div>
               </div>
             </div>
 
             {/* Legend */}
             <div>
-              <h3 className="text-sm font-medium text-[#b8a070] mb-2">Legend:</h3>
+              <h3 className="text-sm font-medium text-[#b8a070] mb-2">Legend (Orders):</h3>
               <div className="flex flex-col space-y-2">
                 <div className="flex items-center space-x-2">
                   <div className="w-4 h-4 bg-green-500"></div>
-                  <span className="text-sm text-[#f5e6d3]">Low (0-50)</span>
+                  <span className="text-sm text-[#f5e6d3]">Low (0-{statistics.lowThreshold})</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <div className="w-4 h-4 bg-orange-500"></div>
-                  <span className="text-sm text-[#f5e6d3]">Medium (51-80)</span>
+                  <span className="text-sm text-[#f5e6d3]">Medium ({statistics.lowThreshold + 1}-{statistics.highThreshold})</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <div className="w-4 h-4 bg-red-500"></div>
-                  <span className="text-sm text-[#f5e6d3]">High (81+)</span>
+                  <span className="text-sm text-[#f5e6d3]">High ({statistics.highThreshold + 1}+)</span>
                 </div>
               </div>
             </div>
@@ -235,22 +249,22 @@ export default function HeatmapSection({ data: propData }: HeatmapSectionProps) 
             {/* Province List */}
             <div className="mt-4">
               <h3 className="text-lg font-medium text-[#d4af37] mb-3">
-                Province Rankings
+                Province Rankings (by Orders)
               </h3>
               <div className="space-y-2 max-h-[250px] overflow-y-auto">
                 {sortedData.length > 0 ? (
                   sortedData.map(([id, value]) => (
                     <div key={id} className="flex items-center justify-between p-2 bg-[#1a1a1a] border border-[#d4af37]/20 text-sm">
                       <div className="flex items-center space-x-2">
-                        <div 
-                          className="w-3 h-3 rounded-full" 
+                        <div
+                          className="w-3 h-3 rounded-full"
                           style={{ backgroundColor: getColorForValue(value) }}
                         ></div>
                         <div className="font-medium text-[#f5e6d3]">
                           {provinceNames[id] || id}
                         </div>
                       </div>
-                      <span className="font-bold text-[#d4af37]">{value}</span>
+                      <span className="font-bold text-[#d4af37]">{value} orders</span>
                     </div>
                   ))
                 ) : (

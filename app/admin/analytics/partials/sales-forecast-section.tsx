@@ -41,18 +41,14 @@ export default function SalesForecastingSection() {
   const [forecastData, setForecastData] = useState<ForecastResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [debugInfo, setDebugInfo] = useState<any>(null);
 
   // Fetch forecast data
   const fetchForecastData = async (period: string) => {
     try {
       setLoading(true);
       setError(null);
-      setDebugInfo(null);
 
-      console.log(`Fetching forecast data for period: ${period}`);
-
-      const response = await fetch(`/api/admin/analytics/forecast?period=${period}`, {
+      const response = await fetch(`/api/admin/analytics/forecast?period=${period}&t=${Date.now()}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -60,38 +56,12 @@ export default function SalesForecastingSection() {
         cache: 'no-store',
       });
 
-      console.log(`Response status: ${response.status}`);
-
       if (!response.ok) {
-        // Try to get error details from response
-        let errorDetails = `HTTP ${response.status}: ${response.statusText}`;
-        try {
-          const errorData = await response.json();
-          if (errorData.error) {
-            errorDetails = errorData.error;
-            if (errorData.details) {
-              errorDetails += ` - ${errorData.details}`;
-            }
-          }
-          setDebugInfo(errorData);
-        } catch (parseError) {
-          console.error('Could not parse error response:', parseError);
-          // Try to get response text
-          try {
-            const errorText = await response.text();
-            if (errorText) {
-              errorDetails += ` - ${errorText.substring(0, 200)}`;
-            }
-          } catch (textError) {
-            console.error('Could not get error text:', textError);
-          }
-        }
-        throw new Error(errorDetails);
+        throw new Error(`Failed to fetch forecast`);
       }
 
       const result = await response.json();
-      console.log('Forecast result:', result);
-      
+
       if (result.error) {
         throw new Error(result.error);
       }
@@ -118,7 +88,6 @@ export default function SalesForecastingSection() {
       month: data.month,
       sales: data.totalSales,
       type: 'historical' as const,
-      confidence: 100,
       id: `historical-${index}`
     }));
 
@@ -126,70 +95,39 @@ export default function SalesForecastingSection() {
       month: data.month,
       sales: data.predictedSales,
       type: 'forecast' as const,
-      confidence: data.confidence,
       id: `forecast-${index}`
     }));
 
     return [...historical, ...forecast];
   }, [forecastData]);
 
-  // Custom dot component with proper key handling
-  const CustomDot = (props: any) => {
-    const { cx, cy, payload, index } = props;
-    return (
-      <circle
-        key={`dot-${payload.id || index}`}
-        cx={cx}
-        cy={cy}
-        r={4}
-        fill={payload.type === 'historical' ? '#3b82f6' : '#ef4444'}
-        stroke={payload.type === 'historical' ? '#1d4ed8' : '#dc2626'}
-        strokeWidth={2}
-      />
-    );
-  };
-
-  // Get confidence level styling
-  const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 70) return '#22c55e'; // Green
-    if (confidence >= 50) return '#f59e0b'; // Yellow
-    return '#ef4444'; // Red
-  };
-
-  const getConfidenceText = (confidence: number) => {
-    if (confidence >= 70) return 'High Confidence';
-    if (confidence >= 50) return 'Medium Confidence';
-    return 'Low Confidence';
-  };
-
-  const getTrendIcon = (trend: string) => {
-    switch (trend) {
-      case 'increasing':
-        return '📈';
-      case 'decreasing':
-        return '📉';
-      default:
-        return '➡️';
-    }
-  };
-
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-PH', {
       style: 'currency',
-      currency: 'PHP'
+      currency: 'PHP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
     }).format(amount);
+  };
+
+  const getTrendLabel = (trend: string) => {
+    switch (trend) {
+      case 'increasing': return { text: 'Growing', color: '#22c55e' };
+      case 'decreasing': return { text: 'Declining', color: '#ef4444' };
+      default: return { text: 'Stable', color: '#d4af37' };
+    }
   };
 
   if (loading) {
     return (
-      <div className="p-6 bg-[#1a1a1a] border">
-        <h2 className="text-2xl font-semibold text-[#f5e6d3] uppercase tracking-[2px] mb-4">
-          SALES FORECASTING
+      <div className="bg-[#1a1a1a] border border-[#d4af37]/20 p-6">
+        <h2 className="text-2xl font-semibold text-[#d4af37] uppercase tracking-[2px] mb-6">
+          SALES FORECAST
         </h2>
         <div className="flex items-center justify-center h-64">
           <div className="flex flex-col items-center gap-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>
-            <p className="text-[#b8a070]">Generating sales forecast...</p>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#d4af37]"></div>
+            <p className="text-[#b8a070]">Generating forecast...</p>
           </div>
         </div>
       </div>
@@ -197,17 +135,18 @@ export default function SalesForecastingSection() {
   }
 
   return (
-    <div className="p-6 bg-[#1a1a1a] border">
+    <div className="bg-[#1a1a1a] border border-[#d4af37]/20 p-6">
+      {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-6">
-        <h2 className="text-2xl font-semibold text-[#f5e6d3] uppercase tracking-[2px] mb-4 lg:mb-0">
-          SALES FORECASTING
+        <h2 className="text-2xl font-semibold text-[#d4af37] uppercase tracking-[2px] mb-4 lg:mb-0">
+          SALES FORECAST
         </h2>
-        
-        <div className="flex items-center gap-4">
+
+        <div className="flex items-center gap-3">
           <select
             value={selectedPeriod}
             onChange={(e) => setSelectedPeriod(e.target.value)}
-            className="px-4 py-2 border border-[#d4af37]/20 focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent"
+            className="px-4 py-2 bg-[#0a0a0a] border border-[#d4af37]/20 text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
             disabled={loading}
           >
             {FORECAST_OPTIONS.map(option => (
@@ -216,277 +155,216 @@ export default function SalesForecastingSection() {
               </option>
             ))}
           </select>
-          
+
           <button
             onClick={() => fetchForecastData(selectedPeriod)}
             disabled={loading}
-            className="px-4 py-2 bg-black text-white hover:bg-[#d4af37]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-4 py-2 bg-[#d4af37] text-[#0a0a0a] font-medium hover:bg-[#d4af37]/90 disabled:opacity-50 transition-colors"
           >
-            {loading ? 'Loading...' : 'Refresh'}
+            Refresh
           </button>
         </div>
       </div>
 
+      {/* Error State */}
       {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
-          <p className="text-red-800 mb-2">
+        <div className="mb-6 p-4 bg-red-900/20 border border-red-500/30">
+          <p className="text-red-400">
             <strong>Error:</strong> {error}
           </p>
-          {debugInfo && (
-            <details className="mt-2">
-              <summary className="cursor-pointer text-red-600 text-sm hover:text-red-800">
-                Show Debug Information
-              </summary>
-              <pre className="mt-2 p-2 bg-red-100 text-xs overflow-auto max-h-40 text-red-700">
-                {JSON.stringify(debugInfo, null, 2)}
-              </pre>
-            </details>
-          )}
-          <div className="mt-3 text-sm text-red-600">
-            <p><strong>Troubleshooting Tips:</strong></p>
-            <ul className="list-disc list-inside mt-1 space-y-1">
-              <li>Check if you have orders data in your database</li>
-              <li>Verify your Supabase connection is working</li>
-              <li>Ensure the orders table has the correct structure</li>
-              <li>Check browser console for additional error details</li>
-            </ul>
-          </div>
+          <p className="text-red-400/70 text-sm mt-2">
+            Make sure you have order data in your database.
+          </p>
         </div>
       )}
 
       {forecastData && (
-        <div className="space-y-8">
-          {/* Forecast Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-blue-50 p-6 border">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-[#b8a070]">PREDICTED SALES</h3>
-                <span className="text-2xl">{getTrendIcon(forecastData.trend)}</span>
-              </div>
-              <div className="text-3xl font-bold text-blue-600 mb-1">
+        <div className="space-y-6">
+          {/* Simple Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Expected Sales */}
+            <div className="bg-[#0a0a0a] border border-[#d4af37]/20 p-5">
+              <div className="text-sm text-[#b8a070] mb-2">Expected Sales</div>
+              <div className="text-2xl font-bold text-[#d4af37]">
                 {formatCurrency(forecastData.predictedSales)}
               </div>
-              <div className="text-sm text-gray-500">{forecastData.period}</div>
+              <div className="text-xs text-[#b8a070] mt-1">{forecastData.period}</div>
             </div>
 
-            <div className="bg-green-50 p-6 border">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-[#b8a070]">PREDICTED ORDERS</h3>
-                <span className="text-2xl">📦</span>
-              </div>
-              <div className="text-3xl font-bold text-green-600 mb-1">
+            {/* Expected Orders */}
+            <div className="bg-[#0a0a0a] border border-[#d4af37]/20 p-5">
+              <div className="text-sm text-[#b8a070] mb-2">Expected Orders</div>
+              <div className="text-2xl font-bold text-[#d4af37]">
                 {forecastData.predictedOrders.toLocaleString()}
               </div>
-              <div className="text-sm text-gray-500">{forecastData.period}</div>
+              <div className="text-xs text-[#b8a070] mt-1">{forecastData.period}</div>
             </div>
 
-            <div className="bg-purple-50 p-6 border">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-[#b8a070]">AVG ORDER VALUE</h3>
-                <span className="text-2xl">💰</span>
-              </div>
-              <div className="text-3xl font-bold text-purple-600 mb-1">
-                {formatCurrency(forecastData.predictedAOV)}
-              </div>
-              <div className="text-sm text-gray-500">Predicted AOV</div>
-            </div>
-
-            <div 
-              className="p-6 border"
-              style={{ backgroundColor: `${getConfidenceColor(forecastData.confidence)}15` }}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-[#b8a070]">CONFIDENCE LEVEL</h3>
-                <span className="text-2xl">🎯</span>
-              </div>
-              <div 
-                className="text-3xl font-bold mb-1"
-                style={{ color: getConfidenceColor(forecastData.confidence) }}
+            {/* Trend */}
+            <div className="bg-[#0a0a0a] border border-[#d4af37]/20 p-5">
+              <div className="text-sm text-[#b8a070] mb-2">Sales Trend</div>
+              <div
+                className="text-2xl font-bold"
+                style={{ color: getTrendLabel(forecastData.trend).color }}
               >
-                {forecastData.confidence}%
+                {getTrendLabel(forecastData.trend).text}
               </div>
-              <div className="text-sm text-gray-500">
-                {getConfidenceText(forecastData.confidence)}
-              </div>
+              <div className="text-xs text-[#b8a070] mt-1">Based on history</div>
             </div>
           </div>
 
-          {/* Data Quality Information */}
-          <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-            <div className="flex items-center">
-              <span className="text-blue-500 text-xl mr-3">ℹ️</span>
-              <div>
-                <h4 className="font-semibold text-blue-800">Forecast Information</h4>
-                <p className="text-blue-700 text-sm">
-                  This forecast is based on {forecastData.historicalData.length} months of historical data.
-                  {forecastData.historicalData.length < 6 && " More historical data will improve forecast accuracy."}
+          {/* What This Means - Simple Explanation */}
+          <div className="bg-[#0a0a0a] border border-[#d4af37]/20 p-5">
+            <h3 className="text-lg font-semibold text-[#d4af37] mb-3">What This Means</h3>
+            <div className="space-y-2 text-[#f5e6d3]">
+              <p>
+                Based on your past {forecastData.historicalData.length} months of sales,
+                we expect you to earn approximately <strong className="text-[#d4af37]">{formatCurrency(forecastData.predictedSales)}</strong> from
+                around <strong className="text-[#d4af37]">{forecastData.predictedOrders} orders</strong> in the {forecastData.period.toLowerCase()}.
+              </p>
+              {forecastData.trend === 'increasing' && (
+                <p className="text-green-400">
+                  Your sales are showing growth. Keep up the good work!
                 </p>
-              </div>
+              )}
+              {forecastData.trend === 'decreasing' && (
+                <p className="text-red-400">
+                  Your sales are declining. Consider promotions or marketing to boost sales.
+                </p>
+              )}
+              {forecastData.trend === 'stable' && (
+                <p className="text-[#d4af37]">
+                  Your sales are steady. This is a good foundation to build on.
+                </p>
+              )}
             </div>
           </div>
 
-          {/* Confidence Warning */}
-          {forecastData.confidence < 50 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-md p-4">
-              <div className="flex items-center">
-                <span className="text-amber-500 text-xl mr-3">⚠️</span>
-                <div>
-                  <h4 className="font-semibold text-amber-800">Low Confidence Forecast</h4>
-                  <p className="text-amber-700 text-sm">
-                    This forecast has low confidence ({forecastData.confidence}%). 
-                    Results may be significantly different from actual outcomes. 
-                    Consider gathering more historical data for better predictions.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Sales Trend Chart */}
-          <div className="bg-gray-100 p-6 border">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              Sales Trend & Forecast
-            </h3>
-            <div className="h-80">
+          {/* Sales Chart */}
+          <div className="bg-[#0a0a0a] border border-[#d4af37]/20 p-5">
+            <h3 className="text-lg font-semibold text-[#d4af37] mb-4">Sales History & Forecast</h3>
+            <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    dataKey="month" 
-                    tick={{ fontSize: 12 }}
+                  <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fontSize: 11, fill: '#b8a070' }}
                     angle={-45}
                     textAnchor="end"
-                    height={80}
+                    height={60}
+                    stroke="#444"
                   />
-                  <YAxis 
-                    tick={{ fontSize: 12 }}
+                  <YAxis
+                    tick={{ fontSize: 11, fill: '#b8a070' }}
                     tickFormatter={(value) => `₱${(value / 1000).toFixed(0)}k`}
+                    stroke="#444"
                   />
-                  <Tooltip 
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#1a1a1a',
+                      border: '1px solid #d4af37',
+                      color: '#f5e6d3'
+                    }}
                     formatter={(value: any, name: any, props: any) => [
                       formatCurrency(value),
                       props.payload.type === 'historical' ? 'Actual Sales' : 'Predicted Sales'
                     ]}
-                    labelFormatter={(label) => `Month: ${label}`}
+                    labelFormatter={(label) => label}
+                    labelStyle={{ color: '#d4af37' }}
                   />
-                  <Line 
-                    type="monotone" 
-                    dataKey="sales" 
-                    stroke="#3b82f6"
-                    strokeWidth={3}
-                    dot={CustomDot}
+                  <Line
+                    type="monotone"
+                    dataKey="sales"
+                    stroke="#d4af37"
+                    strokeWidth={2}
+                    dot={(props: any) => {
+                      const { cx, cy, payload } = props;
+                      return (
+                        <circle
+                          key={payload.id}
+                          cx={cx}
+                          cy={cy}
+                          r={5}
+                          fill={payload.type === 'historical' ? '#d4af37' : '#22c55e'}
+                          stroke={payload.type === 'historical' ? '#b8942e' : '#16a34a'}
+                          strokeWidth={2}
+                        />
+                      );
+                    }}
                   />
                 </LineChart>
               </ResponsiveContainer>
             </div>
-            
+
+            {/* Legend */}
             <div className="mt-4 flex items-center justify-center gap-6 text-sm">
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-blue-500 rounded"></div>
-                <span>Historical Sales</span>
+                <div className="w-3 h-3 rounded-full bg-[#d4af37]"></div>
+                <span className="text-[#f5e6d3]">Past Sales</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-red-500 rounded"></div>
-                <span>Forecasted Sales</span>
+                <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                <span className="text-[#f5e6d3]">Predicted Sales</span>
               </div>
             </div>
           </div>
 
           {/* Monthly Breakdown */}
-          <div className="bg-gray-100 p-6 border">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              Monthly Forecast Breakdown
-            </h3>
-            <div className="h-80">
+          <div className="bg-[#0a0a0a] border border-[#d4af37]/20 p-5">
+            <h3 className="text-lg font-semibold text-[#d4af37] mb-4">Monthly Predictions</h3>
+            <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={forecastData.monthlyBreakdown}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    dataKey="month" 
-                    tick={{ fontSize: 12 }}
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
+                  <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fontSize: 11, fill: '#b8a070' }}
+                    stroke="#444"
                   />
-                  <YAxis 
-                    tick={{ fontSize: 12 }}
+                  <YAxis
+                    tick={{ fontSize: 11, fill: '#b8a070' }}
                     tickFormatter={(value) => `₱${(value / 1000).toFixed(0)}k`}
+                    stroke="#444"
                   />
-                  <Tooltip 
-                    formatter={(value: any, name: any, props: any) => [
-                      formatCurrency(value),
-                      `Predicted Sales (${props.payload.confidence}% confidence)`
-                    ]}
-                    labelFormatter={(label) => `Month: ${label}`}
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#1a1a1a',
+                      border: '1px solid #d4af37',
+                      color: '#f5e6d3'
+                    }}
+                    formatter={(value: any) => [formatCurrency(value), 'Expected Sales']}
+                    labelStyle={{ color: '#d4af37' }}
                   />
-                  <Bar 
-                    dataKey="predictedSales" 
-                    fill="#3b82f6"
+                  <Bar
+                    dataKey="predictedSales"
+                    fill="#d4af37"
                     radius={[4, 4, 0, 0]}
                   />
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </div>
 
-          {/* Analysis Summary */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-gray-100 p-6 border">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Trend Analysis</h3>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-[#b8a070]">Trend Direction:</span>
-                  <span className="font-medium capitalize flex items-center gap-2">
-                    {getTrendIcon(forecastData.trend)}
-                    {forecastData.trend}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#b8a070]">Seasonality Factor:</span>
-                  <span className="font-medium">
-                    {(forecastData.seasonality * 100).toFixed(1)}%
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#b8a070]">Data Points Used:</span>
-                  <span className="font-medium">{forecastData.historicalData.length} months</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-gray-100 p-6 border">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Forecast Insights</h3>
-              <div className="space-y-3 text-sm text-[#f5e6d3]">
-                {forecastData.confidence >= 70 && (
-                  <p>✅ High confidence forecast - reliable for planning</p>
-                )}
-                {forecastData.confidence >= 50 && forecastData.confidence < 70 && (
-                  <p>⚠️ Medium confidence - use with caution</p>
-                )}
-                {forecastData.confidence < 50 && (
-                  <p>❌ Low confidence - results may vary significantly</p>
-                )}
-                
-                {forecastData.trend === 'increasing' && (
-                  <p>📈 Sales showing positive growth trend</p>
-                )}
-                {forecastData.trend === 'decreasing' && (
-                  <p>📉 Sales showing declining trend - consider action</p>
-                )}
-                {forecastData.trend === 'stable' && (
-                  <p>➡️ Sales showing stable performance</p>
-                )}
-                
-                <p>
-                  📊 Based on {forecastData.historicalData.length} months of historical data
-                </p>
-                
-                {forecastData.historicalData.length < 12 && (
-                  <p>
-                    💡 Collecting more historical data will improve forecast accuracy
-                  </p>
-                )}
-              </div>
+            {/* Simple Table */}
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[#d4af37]/20">
+                    <th className="text-left py-2 text-[#b8a070]">Month</th>
+                    <th className="text-right py-2 text-[#b8a070]">Expected Sales</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {forecastData.monthlyBreakdown.map((item, index) => (
+                    <tr key={index} className="border-b border-[#d4af37]/10">
+                      <td className="py-2 text-[#f5e6d3]">{item.month}</td>
+                      <td className="py-2 text-right text-[#d4af37] font-medium">
+                        {formatCurrency(item.predictedSales)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>

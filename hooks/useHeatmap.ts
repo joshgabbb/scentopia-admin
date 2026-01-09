@@ -20,7 +20,7 @@ export function useHeatmap(
 
   const colorFunctionRef = useRef<((id: string, color: string) => void) | null>(null);
   const [data, setData] = useState<ProvinceData>(initialData || {});
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!initialData); // Start loading if no initial data
   const [error, setError] = useState<string | null>(null);
 
   const setColorFunction = (colorFn: (id: string, color: string) => void) => {
@@ -46,7 +46,9 @@ export function useHeatmap(
       setLoading(true);
       setError(null);
 
-      const response = await fetch(apiEndpoint, {
+      // Add timestamp to prevent caching
+      const url = `${apiEndpoint}?t=${Date.now()}`;
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -87,13 +89,15 @@ export function useHeatmap(
   }, [fetchData]);
 
   // Auto-fetch data on mount if enabled and no initial data provided
+  // Using empty dependency array to ensure fetch on every mount
   useEffect(() => {
     if (autoFetch && !initialData) {
       fetchData().catch(() => {
         // Error already handled in fetchData
       });
     }
-  }, [autoFetch, initialData, fetchData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Update data when initialData prop changes
   useEffect(() => {

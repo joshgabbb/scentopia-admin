@@ -84,26 +84,31 @@ export default function FeedbackPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "pending": return "bg-yellow-100 text-yellow-800";
-      case "in_progress": return "bg-blue-100 text-blue-800";
-      case "resolved": return "bg-green-100 text-green-800";
-      case "closed": return "bg-gray-100 text-gray-800";
-      default: return "bg-gray-100 text-gray-800";
+      case "pending": return "bg-yellow-500/20 text-yellow-400";
+      case "in_progress": return "bg-blue-500/20 text-blue-400";
+      case "resolved": return "bg-green-500/20 text-green-400";
+      case "closed": return "bg-[#333] text-[#b8a070]";
+      default: return "bg-[#333] text-[#b8a070]";
     }
   };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case "urgent": return "bg-red-100 text-red-800";
-      case "high": return "bg-orange-100 text-orange-800";
-      case "medium": return "bg-yellow-100 text-yellow-800";
-      case "low": return "bg-green-100 text-green-800";
-      default: return "bg-gray-100 text-gray-800";
+      case "urgent": return "bg-red-500/20 text-red-400";
+      case "high": return "bg-orange-500/20 text-orange-400";
+      case "medium": return "bg-yellow-500/20 text-yellow-400";
+      case "low": return "bg-green-500/20 text-green-400";
+      default: return "bg-[#333] text-[#b8a070]";
     }
   };
 
   if (isLoading) {
-    return <div className="p-6">Loading...</div>;
+    return (
+      <div className="p-6 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#d4af37]"></div>
+        <span className="ml-3 text-[#b8a070]">Loading...</span>
+      </div>
+    );
   }
 
   return (
@@ -112,7 +117,7 @@ export default function FeedbackPage() {
       <div className="flex items-center gap-3">
         <button
           onClick={() => router.push("/admin/reports")}
-          className="flex items-center gap-2 px-4 py-2 border border-gray-300 hover:bg-gray-50 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 border border-[#d4af37]/20 text-[#f5e6d3] hover:border-[#d4af37]/50 transition-colors"
         >
           <span>←</span>
           <span>Back to Reports</span>
@@ -120,8 +125,8 @@ export default function FeedbackPage() {
       </div>
 
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Feedback Management</h1>
-        <button className="px-4 py-2 bg-black text-white hover:bg-gray-800">
+        <h1 className="text-2xl font-bold text-[#d4af37] uppercase tracking-[2px]">Feedback Management</h1>
+        <button className="px-4 py-2 bg-[#d4af37] text-[#0a0a0a] font-medium hover:bg-[#d4af37]/90">
           Export Report
         </button>
       </div>
@@ -132,12 +137,12 @@ export default function FeedbackPage() {
           placeholder="Search feedback..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="flex-1 px-4 py-2 border border-gray-300"
+          className="flex-1 px-4 py-2 bg-[#0a0a0a] border border-[#d4af37]/20 text-[#f5e6d3] placeholder-[#b8a070] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
         />
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2 border border-gray-300"
+          className="px-4 py-2 bg-[#0a0a0a] border border-[#d4af37]/20 text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
         >
           <option value="all">All Status</option>
           <option value="pending">Pending</option>
@@ -148,7 +153,7 @@ export default function FeedbackPage() {
         <select
           value={priorityFilter}
           onChange={(e) => setPriorityFilter(e.target.value)}
-          className="px-4 py-2 border border-gray-300"
+          className="px-4 py-2 bg-[#0a0a0a] border border-[#d4af37]/20 text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
         >
           <option value="all">All Priority</option>
           <option value="urgent">Urgent</option>
@@ -158,51 +163,51 @@ export default function FeedbackPage() {
         </select>
       </div>
 
-      <div className="bg-white border">
+      <div className="bg-[#1a1a1a] border border-[#d4af37]/20">
         <table className="w-full">
-          <thead className="bg-gray-50">
+          <thead className="bg-[#0a0a0a]">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Subject</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-[#b8a070] uppercase">Customer</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-[#b8a070] uppercase">Subject</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-[#b8a070] uppercase">Category</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-[#b8a070] uppercase">Priority</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-[#b8a070] uppercase">Status</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-[#b8a070] uppercase">Date</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-[#b8a070] uppercase">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y divide-[#d4af37]/10">
             {feedback.map((item) => (
-              <tr key={item.id} className="hover:bg-gray-50">
+              <tr key={item.id} className="hover:bg-[#0a0a0a]/50">
                 <td className="px-6 py-4">
                   <div>
-                    <div className="font-medium">{item.customerName}</div>
-                    <div className="text-sm text-gray-500">{item.customerEmail}</div>
+                    <div className="font-medium text-[#f5e6d3]">{item.customerName}</div>
+                    <div className="text-sm text-[#b8a070]">{item.customerEmail}</div>
                   </div>
                 </td>
                 <td className="px-6 py-4">
-                  <div className="max-w-xs truncate">{item.subject}</div>
+                  <div className="max-w-xs truncate text-[#f5e6d3]">{item.subject}</div>
                 </td>
                 <td className="px-6 py-4">
-                  <span className="capitalize">{item.category}</span>
+                  <span className="capitalize text-[#f5e6d3]">{item.category}</span>
                 </td>
                 <td className="px-6 py-4">
-                  <span className={`px-2 py-1 text-xs rounded-full ${getPriorityColor(item.priority)}`}>
+                  <span className={`px-2 py-1 text-xs ${getPriorityColor(item.priority)}`}>
                     {item.priority}
                   </span>
                 </td>
                 <td className="px-6 py-4">
-                  <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(item.status)}`}>
+                  <span className={`px-2 py-1 text-xs ${getStatusColor(item.status)}`}>
                     {item.status}
                   </span>
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-500">
+                <td className="px-6 py-4 text-sm text-[#b8a070]">
                   {new Date(item.createdAt).toLocaleDateString()}
                 </td>
                 <td className="px-6 py-4">
                   <button
                     onClick={() => setSelectedFeedback(item)}
-                    className="text-blue-600 hover:text-blue-800"
+                    className="text-[#d4af37] hover:text-[#d4af37]/80"
                   >
                     View
                   </button>
@@ -214,17 +219,17 @@ export default function FeedbackPage() {
       </div>
 
       {selectedFeedback && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b">
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50">
+          <div className="bg-[#1a1a1a] border border-[#d4af37]/20 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-[#d4af37]/20">
               <div className="flex justify-between items-start">
                 <div>
-                  <h2 className="text-xl font-bold">{selectedFeedback.subject}</h2>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <h2 className="text-xl font-bold text-[#d4af37]">{selectedFeedback.subject}</h2>
+                  <p className="text-sm text-[#b8a070] mt-1">
                     From {selectedFeedback.customerName} ({selectedFeedback.customerEmail})
                   </p>
                 </div>
-                <button onClick={() => setSelectedFeedback(null)} className="text-gray-400 hover:text-gray-600">
+                <button onClick={() => setSelectedFeedback(null)} className="text-[#b8a070] hover:text-[#f5e6d3]">
                   ✕
                 </button>
               </div>
@@ -232,15 +237,15 @@ export default function FeedbackPage() {
 
             <div className="p-6 space-y-4">
               <div>
-                <h3 className="font-semibold mb-2">Message</h3>
-                <p className="text-gray-700">{selectedFeedback.message}</p>
+                <h3 className="font-semibold text-[#d4af37] mb-2">Message</h3>
+                <p className="text-[#f5e6d3]">{selectedFeedback.message}</p>
               </div>
 
               {selectedFeedback.adminResponse && (
-                <div className="bg-blue-50 p-4 rounded">
-                  <h3 className="font-semibold mb-2">Your Response</h3>
-                  <p className="text-gray-700">{selectedFeedback.adminResponse}</p>
-                  <p className="text-xs text-gray-500 mt-2">
+                <div className="bg-[#0a0a0a] border border-[#d4af37]/20 p-4">
+                  <h3 className="font-semibold text-[#d4af37] mb-2">Your Response</h3>
+                  <p className="text-[#f5e6d3]">{selectedFeedback.adminResponse}</p>
+                  <p className="text-xs text-[#b8a070] mt-2">
                     Responded: {new Date(selectedFeedback.respondedAt!).toLocaleString()}
                   </p>
                 </div>
@@ -248,17 +253,17 @@ export default function FeedbackPage() {
 
               {selectedFeedback.status !== "resolved" && (
                 <div>
-                  <h3 className="font-semibold mb-2">Send Response</h3>
+                  <h3 className="font-semibold text-[#d4af37] mb-2">Send Response</h3>
                   <textarea
                     value={response}
                     onChange={(e) => setResponse(e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded"
+                    className="w-full p-3 bg-[#0a0a0a] border border-[#d4af37]/20 text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                     rows={4}
                     placeholder="Type your response..."
                   />
                   <button
                     onClick={handleRespond}
-                    className="mt-2 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700"
+                    className="mt-2 px-4 py-2 bg-[#d4af37] text-[#0a0a0a] font-medium hover:bg-[#d4af37]/90"
                   >
                     Send Response
                   </button>
@@ -274,15 +279,15 @@ export default function FeedbackPage() {
           <button
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
             disabled={currentPage === 1}
-            className="px-4 py-2 border disabled:opacity-50"
+            className="px-4 py-2 border border-[#d4af37]/20 text-[#f5e6d3] disabled:opacity-50 hover:border-[#d4af37]/50"
           >
             Previous
           </button>
-          <span className="px-4 py-2">Page {currentPage} of {totalPages}</span>
+          <span className="px-4 py-2 text-[#b8a070]">Page {currentPage} of {totalPages}</span>
           <button
             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
-            className="px-4 py-2 border disabled:opacity-50"
+            className="px-4 py-2 border border-[#d4af37]/20 text-[#f5e6d3] disabled:opacity-50 hover:border-[#d4af37]/50"
           >
             Next
           </button>

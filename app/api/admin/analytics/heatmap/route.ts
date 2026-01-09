@@ -152,14 +152,8 @@ export async function GET() {
     });
 
 
-    const maxCount = Math.max(...Object.values(provinceCount));
-    const normalizedData: Record<string, number> = {};
-
-    Object.entries(provinceCount).forEach(([province, count]) => {
-      normalizedData[province] = Math.round((count / maxCount) * 100);
-    });
-
-    return Response.json(normalizedData);
+    // Return raw order counts instead of normalized scores
+    return Response.json(provinceCount);
   } catch (error) {
     console.error("Error fetching heatmap data:", error);
     return Response.json(
