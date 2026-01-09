@@ -1,16 +1,14 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  // REMOVED: eslint block (no longer supported in Next.js 16)
+  turbopack: {},  // Add this empty object to silence the error
 
   typescript: {
-    // Temporarily skip TypeScript type-checking during Vercel builds
-    // (run `next build` locally to catch errors)
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: true,  // Keep this temporarily if type-checking hangs
   },
 
   webpack(config) {
-    // Find the existing file loader rule that handles SVGs
+    // Your existing SVG rules...
     const fileLoaderRule = config.module.rules.find((rule: any) =>
       rule.test?.test?.('.svg')
     );
@@ -20,13 +18,11 @@ const nextConfig: NextConfig = {
     }
 
     config.module.rules.push(
-      // Reapply the existing file loader for ?url imports
       {
         ...fileLoaderRule,
         test: /\.svg$/i,
         resourceQuery: /url/,
       },
-      // Convert other *.svg imports to React components
       {
         test: /\.svg$/i,
         issuer: fileLoaderRule.issuer,
@@ -35,7 +31,6 @@ const nextConfig: NextConfig = {
       }
     );
 
-    // Exclude .svg from the default file loader
     fileLoaderRule.exclude = /\.svg$/i;
 
     return config;
