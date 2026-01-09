@@ -1,8 +1,10 @@
 // app/admin/reports/page.tsx
 "use client";
 
+
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+
 
 interface Stats {
   pendingFeedback: number;
@@ -12,6 +14,7 @@ interface Stats {
   pendingNotifications: number;
   auditLogs: number;
 }
+
 
 export default function ReportsPage() {
   const router = useRouter();
@@ -25,15 +28,18 @@ export default function ReportsPage() {
     auditLogs: 0,
   });
 
+
   useEffect(() => {
     fetchStats();
   }, []);
+
 
   const fetchStats = async () => {
     try {
       setIsLoading(true);
       const response = await fetch('/api/admin/reports/stats');
       const result = await response.json();
+
 
       if (result.success) {
         setStats(result.data);
@@ -44,6 +50,7 @@ export default function ReportsPage() {
       setIsLoading(false);
     }
   };
+
 
   const modules = [
     {
@@ -102,13 +109,16 @@ export default function ReportsPage() {
     },
   ];
 
+
   const handleModuleClick = (path: string) => {
     router.push(path);
   };
 
+
   const Skeleton = ({ className }: { className?: string }) => (
     <div className={`animate-pulse bg-[#333] rounded ${className}`} />
   );
+
 
   if (isLoading) {
     return (
@@ -117,6 +127,7 @@ export default function ReportsPage() {
           <Skeleton className="h-8 w-64 mb-2" />
           <Skeleton className="h-4 w-96" />
         </div>
+
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -135,6 +146,7 @@ export default function ReportsPage() {
     );
   }
 
+
   return (
     <div className="space-y-8">
       <div>
@@ -145,6 +157,7 @@ export default function ReportsPage() {
           Monitor feedback, inventory, and system activities across all modules
         </p>
       </div>
+
 
       {stats.lowStockAlerts > 0 && (
         <div className="bg-red-900/20 border border-red-500/30 p-4 flex items-start gap-3">
@@ -164,6 +177,7 @@ export default function ReportsPage() {
         </div>
       )}
 
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {modules.map((module) => (
           <button
@@ -180,10 +194,12 @@ export default function ReportsPage() {
               </span>
             </div>
 
+
             <h3 className="text-lg font-semibold text-[#f5e6d3] mb-2 group-hover:text-[#d4af37]">
               {module.title}
             </h3>
             <p className="text-[#b8a070] text-sm mb-4">{module.description}</p>
+
 
             <div className="flex items-center justify-between">
               <span className="text-xs text-[#b8a070]">{module.trendValue}</span>
@@ -192,6 +208,7 @@ export default function ReportsPage() {
           </button>
         ))}
       </div>
+
 
       <div className="bg-[#1a1a1a] border border-[#d4af37]/20 p-6">
         <h2 className="text-lg font-semibold text-[#d4af37] mb-4">Quick Overview</h2>
@@ -225,3 +242,6 @@ export default function ReportsPage() {
     </div>
   );
 }
+
+
+
