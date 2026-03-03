@@ -33,6 +33,8 @@ import {
   ArrowUpFromLine,
   ClipboardList,
   Smartphone,
+  RefreshCw,
+  X as XIcon,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import logo from "@/public/assets/images/general/stp-transparent-logo-light.png";
@@ -115,6 +117,52 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const [showAccountSettings, setShowAccountSettings] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // ── Real inventory alert bell ─────────────────────────────────────────
+  type BellAlert = { id: string; productName: string; message: string; severity: "critical" | "high"; stock: number };
+  const [bellCount,    setBellCount]    = useState(0);
+  const [bellCritical, setBellCritical] = useState(0);
+  const [bellAlerts,   setBellAlerts]   = useState<BellAlert[]>([]);
+  const [toasts,       setToasts]       = useState<{ id: string; title: string; body: string }[]>([]);
+  const toastShownRef = useRef(false);
+
+  const fetchBellAlerts = useCallback(async () => {
+    try {
+      const res    = await fetch("/api/admin/alerts/bell");
+      const result = await res.json();
+      setBellCount(result.count    ?? 0);
+      setBellCritical(result.criticalCount ?? 0);
+      setBellAlerts(result.alerts  ?? []);
+
+      // Show a one-time toast per session if there are critical alerts
+      if ((result.criticalCount ?? 0) > 0 && !toastShownRef.current) {
+        toastShownRef.current = true;
+        const id = Date.now().toString();
+        setToasts((prev) => [
+          ...prev,
+          {
+            id,
+            title: `🚨 ${result.criticalCount} Critical Stock Alert${result.criticalCount === 1 ? "" : "s"}`,
+            body:  result.alerts
+              .filter((a: BellAlert) => a.severity === "critical")
+              .slice(0, 2)
+              .map((a: BellAlert) => a.productName)
+              .join(", "),
+          },
+        ]);
+        setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 8000);
+      }
+    } catch {
+      // silent — never crash the layout
+    }
+  }, []);
+
+  // Fetch on mount, then every 90 seconds
+  useEffect(() => {
+    fetchBellAlerts();
+    const interval = setInterval(fetchBellAlerts, 90_000);
+    return () => clearInterval(interval);
+  }, [fetchBellAlerts]);
 
   // Account settings form
   const [accountForm, setAccountForm] = useState({
@@ -539,7 +587,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                 {/* Theme Toggle */}
                 <ThemeSwitcher />
 
-                {/* Notifications */}
+                {/* Inventory Alert Bell — real data from /api/admin/alerts/bell */}
                 <div className="relative" ref={notificationsRef}>
                   <button
                     onClick={() => {
@@ -547,64 +595,76 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                       setIsUserMenuOpen(false);
                     }}
                     className={`relative p-2 ${themeClasses.hoverBg} transition-colors duration-150 rounded-md active:scale-95 ${themeClasses.text}`}
+                    title="Inventory alerts"
                   >
                     <Bell className="w-5 h-5" />
-                    <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
+                    {bellCount > 0 && (
+                      <span className={`absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 flex items-center justify-center rounded-full text-[10px] font-bold text-white leading-none ${bellCritical > 0 ? "bg-red-500" : "bg-amber-500"}`}>
+                        {bellCount > 99 ? "99+" : bellCount}
+                      </span>
+                    )}
                   </button>
 
-                  {/* Notifications Dropdown */}
+                  {/* Bell Dropdown */}
                   {isNotificationsOpen && (
-                    <div className={`absolute right-0 mt-2 w-80 ${themeClasses.bgSecondary} border ${themeClasses.border} shadow-xl z-50 transition-colors duration-200`}>
-                      <div className={`px-4 py-3 border-b ${themeClasses.border}`}>
-                        <h3 className={`text-sm font-semibold ${themeClasses.accent}`}>Notifications</h3>
+                    <div className={`absolute right-0 mt-2 w-80 ${themeClasses.bgSecondary} border ${themeClasses.border} shadow-xl z-50`}>
+                      <div className={`px-4 py-3 border-b ${themeClasses.border} flex items-center justify-between`}>
+                        <h3 className={`text-sm font-semibold ${themeClasses.accent}`}>
+                          Inventory Alerts
+                        </h3>
+                        {bellCount > 0 && (
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${bellCritical > 0 ? "bg-red-50 text-red-700 border border-red-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
+                            {bellCount} active
+                          </span>
+                        )}
                       </div>
-                      <div className="max-h-64 overflow-y-auto">
-                        <div className={`px-4 py-3 ${themeClasses.hoverBg} border-b ${themeClasses.border} cursor-pointer`}>
-                          <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0">
-                              <ShoppingBag className="w-4 h-4 text-green-500" />
-                            </div>
-                            <div>
-                              <p className={`text-sm ${themeClasses.text}`}>New order received</p>
-                              <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Order #A1B2C3 - 2 items</p>
-                              <p className={`text-xs ${themeClasses.textMuted} opacity-60 mt-1`}>5 minutes ago</p>
-                            </div>
+
+                      <div className="max-h-72 overflow-y-auto">
+                        {bellAlerts.length === 0 ? (
+                          <div className="px-4 py-8 text-center">
+                            <Package className={`w-8 h-8 mx-auto mb-2 ${themeClasses.textMuted} opacity-40`} />
+                            <p className={`text-sm ${themeClasses.textMuted}`}>All stock levels are healthy</p>
                           </div>
-                        </div>
-                        <div className={`px-4 py-3 ${themeClasses.hoverBg} border-b ${themeClasses.border} cursor-pointer`}>
-                          <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 bg-orange-500/20 rounded-full flex items-center justify-center flex-shrink-0">
-                              <Package className="w-4 h-4 text-orange-500" />
-                            </div>
-                            <div>
-                              <p className={`text-sm ${themeClasses.text}`}>Low stock alert</p>
-                              <p className={`text-xs ${themeClasses.textMuted} mt-1`}>3 products need restocking</p>
-                              <p className={`text-xs ${themeClasses.textMuted} opacity-60 mt-1`}>1 hour ago</p>
-                            </div>
-                          </div>
-                        </div>
-                        <div className={`px-4 py-3 ${themeClasses.hoverBg} cursor-pointer`}>
-                          <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center flex-shrink-0">
-                              <BarChart3 className="w-4 h-4 text-blue-500" />
-                            </div>
-                            <div>
-                              <p className={`text-sm ${themeClasses.text}`}>Weekly report ready</p>
-                              <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Sales increased by 15%</p>
-                              <p className={`text-xs ${themeClasses.textMuted} opacity-60 mt-1`}>Yesterday</p>
-                            </div>
-                          </div>
-                        </div>
+                        ) : (
+                          bellAlerts.map((alert) => (
+                            <button
+                              key={alert.id}
+                              onClick={() => {
+                                router.push("/admin/management/inventory-alerts");
+                                setIsNotificationsOpen(false);
+                              }}
+                              className={`w-full text-left px-4 py-3 ${themeClasses.hoverBg} border-b ${themeClasses.border} last:border-b-0 transition-colors`}
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${alert.severity === "critical" ? "bg-red-100" : "bg-amber-100"}`}>
+                                  <Package className={`w-4 h-4 ${alert.severity === "critical" ? "text-red-600" : "text-amber-600"}`} />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className={`text-sm font-medium ${themeClasses.text} truncate`}>{alert.productName}</p>
+                                  <p className={`text-xs ${themeClasses.textMuted} mt-0.5`}>{alert.message}</p>
+                                </div>
+                              </div>
+                            </button>
+                          ))
+                        )}
                       </div>
-                      <div className={`px-4 py-3 border-t ${themeClasses.border}`}>
+
+                      <div className={`px-4 py-3 border-t ${themeClasses.border} flex items-center gap-2`}>
                         <button
                           onClick={() => {
-                            router.push('/admin/management/notifications');
+                            router.push("/admin/management/inventory-alerts");
                             setIsNotificationsOpen(false);
                           }}
-                          className={`w-full text-sm ${themeClasses.accent} hover:opacity-80 text-center font-medium`}
+                          className={`flex-1 text-sm ${themeClasses.accent} hover:opacity-80 text-center font-medium`}
                         >
-                          View all notifications
+                          View all alerts
+                        </button>
+                        <button
+                          onClick={() => { fetchBellAlerts(); setIsNotificationsOpen(false); }}
+                          className={`p-1.5 ${themeClasses.textMuted} hover:${themeClasses.text} transition-colors`}
+                          title="Refresh"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
@@ -703,6 +763,38 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
           )}
           {children}
         </main>
+      </div>
+
+      {/* Critical Stock Toast Notifications */}
+      <div className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className="pointer-events-auto flex items-start gap-3 bg-white border border-red-200 shadow-xl rounded-sm px-4 py-3 max-w-xs animate-slide-in-right"
+          >
+            <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+              <Package className="w-4 h-4 text-red-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-[#1c1810]">{toast.title}</p>
+              {toast.body && (
+                <p className="text-xs text-[#7a6a4a] mt-0.5 truncate">{toast.body}</p>
+              )}
+              <button
+                onClick={() => router.push("/admin/management/inventory-alerts")}
+                className="text-xs text-[#8B6914] font-semibold mt-1 hover:underline"
+              >
+                View alerts →
+              </button>
+            </div>
+            <button
+              onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
+              className="text-[#9a8a6a] hover:text-[#1c1810] transition-colors flex-shrink-0"
+            >
+              <XIcon className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
       </div>
 
       {/* Account Settings Modal */}

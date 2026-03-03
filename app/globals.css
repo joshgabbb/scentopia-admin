@@ -296,3 +296,12 @@ input[type="datetime-local"]::-webkit-datetime-edit-ampm-field {
 .dark .hover\:text-\[\#1c1810\]:hover   { color: #f0e8d8 !important; }
 .dark .hover\:text-\[\#8B6914\]:hover   { color: #D4AF37 !important; }
 .dark .hover\:border-\[\#D4AF37\]:hover { border-color: #D4AF37 !important; }
+
+/* ── Toast slide-in animation ── */
+@keyframes slide-in-right {
+  from { transform: translateX(110%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out forwards;
+}
