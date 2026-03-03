@@ -11,6 +11,20 @@ export default {
   theme: {
     extend: {
       colors: {
+        gold: {
+          DEFAULT: "#D4AF37",
+          dark: "#8B6914",
+          light: "#f5edd6",
+          muted: "rgba(212,175,55,0.15)",
+        },
+        luxury: {
+          bg: "#ffffff",
+          secondary: "#faf8f3",
+          tertiary: "#f2ede4",
+          text: "#1c1810",
+          muted: "#7a6a4a",
+          border: "#e8e0d0",
+        },
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         card: {

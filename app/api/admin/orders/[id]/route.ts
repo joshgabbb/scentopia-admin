@@ -20,7 +20,9 @@ export async function GET(
         created_at,
         order_status,
         email,
+        contact_number,
         note,
+        delivery_location,
         profiles!orders_user_id_fkey(
           first_name,
           last_name,
@@ -58,6 +60,21 @@ export async function GET(
       .eq('id', orderId)
       .single();
 
+    // Try to get courier columns separately (they may not exist yet)
+    let courierInfo = { waybill_number: null, courier_code: null, shipping_fee: null, estimated_delivery: null };
+    try {
+      const { data: courierData } = await supabase
+        .from('orders')
+        .select('waybill_number, courier_code, shipping_fee, estimated_delivery')
+        .eq('id', orderId)
+        .single();
+      if (courierData) {
+        courierInfo = courierData;
+      }
+    } catch (e) {
+      // Courier columns don't exist yet, ignore
+    }
+
     if (error) {
       throw error;
     }
@@ -82,10 +99,11 @@ export async function GET(
     const customerName = profile
       ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || 'Unknown Customer'
       : 'Unknown Customer';
-    
-    const customerEmail = profile?.email || order.email || 'No email';
 
-    // Build customer address
+    const customerEmail = profile?.email || order.email || 'No email';
+    const customerPhone = order.contact_number || null;
+
+    // Build customer address from profile (fallback)
     const addressParts = [
       profile?.street,
       profile?.barangay,
@@ -93,6 +111,23 @@ export async function GET(
       profile?.province
     ].filter(Boolean);
     const customerAddress = addressParts.length > 0 ? addressParts.join(', ') : null;
+
+    // Get delivery location from order (this is what customer provided during checkout)
+    const deliveryLocation = order.delivery_location as {
+      address?: string;
+      full_address?: string;
+      recipient_name?: string;
+      phone_number?: string;
+      region?: { code?: string; name?: string };
+      province?: { code?: string; name?: string };
+      city?: { code?: string; name?: string };
+      barangay?: { code?: string; name?: string };
+      street_address?: string;
+      postal_code?: string;
+      landmarks?: string;
+      latitude?: number;
+      longitude?: number;
+    } | null;
 
     const itemCount = order.order_items?.reduce((sum: number, item: any) => {
       return sum + (Number(item.quantity) || 0);
@@ -120,11 +155,23 @@ export async function GET(
       created_at: track.created_at
     })) || [];
 
+    // Build delivery address string from delivery_location or fallback to profile address
+    const deliveryAddressString = deliveryLocation?.full_address
+      || deliveryLocation?.address
+      || [
+          deliveryLocation?.street_address,
+          deliveryLocation?.barangay?.name,
+          deliveryLocation?.city?.name,
+          deliveryLocation?.province?.name,
+          deliveryLocation?.region?.name
+        ].filter(Boolean).join(', ')
+      || customerAddress;
+
     const formattedOrder = {
       id: order.id,
       customerName,
       customerEmail,
-      customerPhone: null, // Add phone to profiles table if needed
+      customerPhone,
       customerAddress,
       amount: Number(order.amount),
       status: order.order_status || 'Pending',
@@ -132,8 +179,19 @@ export async function GET(
       orderNumber,
       itemCount,
       note: order.note,
-      trackingNumber: null, // Will be populated when shipping is created
-      courier: null, // Will be populated when shipping is created
+      // Courier/shipping info
+      trackingNumber: courierInfo.waybill_number || null,
+      waybillNumber: courierInfo.waybill_number || null,
+      courier: courierInfo.courier_code || null,
+      courierCode: courierInfo.courier_code || null,
+      shippingFee: courierInfo.shipping_fee ? Number(courierInfo.shipping_fee) : null,
+      estimatedDelivery: courierInfo.estimated_delivery || null,
+      // Delivery location from checkout
+      deliveryLocation: deliveryLocation,
+      deliveryAddress: deliveryAddressString,
+      recipientName: deliveryLocation?.recipient_name || customerName,
+      recipientPhone: deliveryLocation?.phone_number || customerPhone,
+      // Links
       paymentLink: `https://balidining.me/order/${order.id}`,
       payment: paymentInfo,
       trackingHistory,

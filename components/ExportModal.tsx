@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { FileText, FileSpreadsheet } from "lucide-react";
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ interface ExportModalProps {
 
 export interface ExportOptions {
   exportType: "all" | "filtered";
+  format: "csv" | "pdf";
   dateRange?: {
     from: string;
     to: string;
@@ -34,6 +36,7 @@ export default function ExportModal({
   currentDays
 }: ExportModalProps) {
   const [exportType, setExportType] = useState<"all" | "filtered">("all");
+  const [format, setFormat] = useState<"csv" | "pdf">("csv");
   const [useDateRange, setUseDateRange] = useState(false);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -44,6 +47,7 @@ export default function ExportModal({
   const handleExport = () => {
     const options: ExportOptions = {
       exportType,
+      format,
       includeDetails
     };
 
@@ -64,7 +68,7 @@ export default function ExportModal({
       
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-[#1a1a1a] text-white rounded-lg shadow-xl w-full max-w-md">
+        <div className="bg-[#faf8f3] text-white rounded-lg shadow-xl w-full max-w-md">
           {/* Header */}
           <div className="px-6 py-4">
             <h2 className="text-lg font-semibold text-yellow-500">{title}</h2>
@@ -72,6 +76,45 @@ export default function ExportModal({
 
           {/* Body */}
           <div className="px-6 pb-4 space-y-4">
+            {/* Export Format */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-3">
+                Export Format
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setFormat("csv")}
+                  className={`flex items-center justify-center gap-2 p-3 rounded border-2 transition-all ${
+                    format === "csv"
+                      ? "border-yellow-500 bg-yellow-500/10 text-yellow-500"
+                      : "border-gray-700 text-gray-400 hover:border-gray-600"
+                  }`}
+                >
+                  <FileSpreadsheet className="w-5 h-5" />
+                  <div className="text-left">
+                    <div className="font-medium">CSV</div>
+                    <div className="text-xs opacity-70">Spreadsheet</div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormat("pdf")}
+                  className={`flex items-center justify-center gap-2 p-3 rounded border-2 transition-all ${
+                    format === "pdf"
+                      ? "border-yellow-500 bg-yellow-500/10 text-yellow-500"
+                      : "border-gray-700 text-gray-400 hover:border-gray-600"
+                  }`}
+                >
+                  <FileText className="w-5 h-5" />
+                  <div className="text-left">
+                    <div className="font-medium">PDF</div>
+                    <div className="text-xs opacity-70">Document</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+
             {/* Export Type */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-3">
@@ -176,8 +219,8 @@ export default function ExportModal({
               onClick={handleExport}
               className="px-6 py-2 bg-yellow-500 hover:bg-yellow-600 text-black font-medium rounded flex items-center gap-2 transition-colors"
             >
-              <span>📥</span>
-              Export CSV
+              {format === "pdf" ? <FileText className="w-4 h-4" /> : <FileSpreadsheet className="w-4 h-4" />}
+              Export {format.toUpperCase()}
             </button>
           </div>
         </div>

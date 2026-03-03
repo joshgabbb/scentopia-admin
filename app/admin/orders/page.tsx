@@ -1,6 +1,6 @@
 
 
-// app/admin/orders/page.tsxx
+// app/admin/orders/page.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -9,12 +9,14 @@ import {
   Filter,
   ArrowUpDown,
   FileText,
+  FileSpreadsheet,
   Edit,
   MoreHorizontal,
   Download,
   Plus,
 } from "lucide-react";
 import OrderDetails from "./order-details";
+import { exportReport, createOrdersExportConfig, type ExportFormat } from "@/lib/export-utils";
 
 // [Keep all the interfaces the same - PaymentInfo, OrderItem, Order, OrdersData]
 interface PaymentInfo {
@@ -110,7 +112,7 @@ const getStatusColor = (status: string) => {
     case "refunded":
       return "bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/30";
     default:
-      return "bg-[#d4af37]/10 text-[#b8a070] border border-[#d4af37]/30";
+      return "bg-[#d4af37]/10 text-[#7a6a4a] border border-[#d4af37]/30";
   }
 };
 
@@ -125,7 +127,7 @@ const getFulfillmentStatus = (orderStatus: string) => {
     case "cancelled":
       return { status: "CANCELLED", color: "bg-red-900/20 text-red-400 border border-red-400/30" };
     default:
-      return { status: "UNFULFILLED", color: "bg-[#d4af37]/10 text-[#b8a070] border border-[#d4af37]/30" };
+      return { status: "UNFULFILLED", color: "bg-[#d4af37]/10 text-[#7a6a4a] border border-[#d4af37]/30" };
   }
 };
 
@@ -167,7 +169,8 @@ export default function OrdersPage() {
 const [exportOptions, setExportOptions] = useState({
   dateFrom: '',
   dateTo: '',
-  exportType: 'all' // 'all', 'selected', 'daterange'
+  exportType: 'all', // 'all', 'selected', 'daterange'
+  format: 'csv' as ExportFormat
 });
 
   const [tempFilters, setTempFilters] = useState({
@@ -191,6 +194,14 @@ const [exportOptions, setExportOptions] = useState({
     status: 'Pending',
     paymentMethod: 'gcash',
     paymentStatus: 'pending'
+  });
+
+  // Stats for top summary
+  const [orderStats, setOrderStats] = useState({
+    totalOrders: 0,
+    completed: 0,
+    pending: 0,
+    totalRevenue: 0,
   });
 
   const fetchOrderDetails = async (orderId: string) => {
@@ -254,6 +265,37 @@ const [exportOptions, setExportOptions] = useState({
   useEffect(() => {
     fetchOrders();
   }, [currentPage, sortBy, sortOrder, statusFilter, paymentStatusFilter]);
+
+  // Fetch order stats for summary
+  useEffect(() => {
+    const fetchOrderStats = async () => {
+      try {
+        // Fetch order status counts
+        const ordersResponse = await fetch('/api/admin/orders?page=1&status=all&payment_status=all');
+        const ordersResult = await ordersResponse.json();
+
+        const dashboardResponse = await fetch('/api/admin/dashboard');
+        const dashboardResult = await dashboardResponse.json();
+
+        if (dashboardResult.success) {
+          // Calculate completed and pending from recent orders or use dashboard stats
+          const allOrders = ordersResult.data?.orders || [];
+          const completed = allOrders.filter((o: any) => o.status === 'Delivered').length;
+          const pending = allOrders.filter((o: any) => o.status === 'Pending' || o.status === 'Processing').length;
+
+          setOrderStats({
+            totalOrders: dashboardResult.data.stats.totalOrders || 0,
+            completed: completed,
+            pending: pending,
+            totalRevenue: dashboardResult.data.stats.revenue || 0,
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch order stats:', error);
+      }
+    };
+    fetchOrderStats();
+  }, []);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -321,11 +363,11 @@ const executeExport = () => {
       alert('Please select both start and end dates');
       return;
     }
-    
+
     const fromDate = new Date(exportOptions.dateFrom);
     const toDate = new Date(exportOptions.dateTo);
-    toDate.setHours(23, 59, 59, 999); // Include full end day
-    
+    toDate.setHours(23, 59, 59, 999);
+
     ordersToExport = ordersToExport.filter(order => {
       const orderDate = new Date(order.createdAt);
       return orderDate >= fromDate && orderDate <= toDate;
@@ -337,62 +379,34 @@ const executeExport = () => {
     return;
   }
 
-  // Create CSV content
-  const headers = [
-    'Order Number',
-    'Customer Name',
-    'Email',
-    'Amount',
-    'Order Status',
-    'Payment Status',
-    'Payment Method',
-    'Items',
-    'Date'
-  ];
-  
-  const csvRows = [
-    headers.join(','),
-    ...ordersToExport.map(order => [
-      `"${order.orderNumber}"`,
-      `"${order.customerName}"`,
-      `"${order.customerEmail}"`,
-      order.amount,
-      order.status,
-      order.payment?.paymentStatus || 'N/A',
-      order.payment?.paymentMethod || 'N/A',
-      order.itemCount,
-      formatDate(order.createdAt)
-    ].join(','))
-  ];
+  // Create export config with date range if applicable
+  const dateRange = exportOptions.exportType === 'daterange' && exportOptions.dateFrom && exportOptions.dateTo
+    ? { from: exportOptions.dateFrom, to: exportOptions.dateTo }
+    : undefined;
 
-  const csvContent = csvRows.join('\n');
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  
+  const exportConfig = createOrdersExportConfig(ordersToExport, dateRange);
+
   // Custom filename based on export type
-  let filename = 'orders_export';
   if (exportOptions.exportType === 'selected') {
-    filename += `_selected_${selectedOrders.size}`;
+    exportConfig.filename = `orders_selected_${selectedOrders.size}`;
+    exportConfig.subtitle = `Selected orders export (${selectedOrders.size} orders)`;
   } else if (exportOptions.exportType === 'daterange') {
-    filename += `_${exportOptions.dateFrom}_to_${exportOptions.dateTo}`;
+    exportConfig.filename = `orders_${exportOptions.dateFrom}_to_${exportOptions.dateTo}`;
   }
-  filename += `_${new Date().toISOString().split('T')[0]}.csv`;
-  
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
+
+  // Export using the utility
+  exportReport(exportConfig, exportOptions.format);
 
   // Close modal and reset
   setShowExportModal(false);
   setExportOptions({
     dateFrom: '',
     dateTo: '',
-    exportType: 'all'
+    exportType: 'all',
+    format: 'csv'
   });
 
-  alert(`Successfully exported ${ordersToExport.length} order(s)!`);
+  alert(`Successfully exported ${ordersToExport.length} order(s) as ${exportOptions.format.toUpperCase()}!`);
 };
 
   // 2. SUMMARY CALCULATOR
@@ -560,7 +574,7 @@ const executeExport = () => {
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div className="text-red-400 text-lg mb-2">Error loading orders</div>
-          <div className="text-[#b8a070] text-sm">{error}</div>
+          <div className="text-[#7a6a4a] text-sm">{error}</div>
           <button
             onClick={fetchOrders}
             className="mt-4 px-4 py-2 bg-[#d4af37] text-[#0a0a0a] hover:bg-[#d4af37]/90 transition-colors"
@@ -575,7 +589,7 @@ const executeExport = () => {
   const displayOrders = data ? sortOrdersClientSide(data.orders) : [];
 
   return (
-    <div className="space-y-6 bg-[#0a0a0a] min-h-screen">
+    <div className="space-y-6 bg-white min-h-screen">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
@@ -586,20 +600,37 @@ const executeExport = () => {
             </span>
           </div>
         </div>
-         </div>
-      <div className="flex items-center justify-between">
-        
+      </div>
+
+      {/* Order Stats Summary */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-[#faf8f3] border border-[#e8e0d0] p-4">
+          <p className="text-sm text-[#7a6a4a]">Total Orders</p>
+          <p className="text-2xl font-bold text-[#d4af37]">{orderStats.totalOrders.toLocaleString()}</p>
+        </div>
+        <div className="bg-[#faf8f3] border border-[#e8e0d0] p-4">
+          <p className="text-sm text-[#7a6a4a]">Completed</p>
+          <p className="text-2xl font-bold text-green-400">{orderStats.completed.toLocaleString()}</p>
+        </div>
+        <div className="bg-[#faf8f3] border border-[#e8e0d0] p-4">
+          <p className="text-sm text-[#7a6a4a]">Pending</p>
+          <p className="text-2xl font-bold text-yellow-400">{orderStats.pending.toLocaleString()}</p>
+        </div>
+        <div className="bg-[#faf8f3] border border-[#e8e0d0] p-4">
+          <p className="text-sm text-[#7a6a4a]">Revenue</p>
+          <p className="text-2xl font-bold text-[#d4af37]">{formatCurrency(orderStats.totalRevenue)}</p>
+        </div>
       </div>
 
       {/* Search and Filters */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4 flex-1 max-w-2xl">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#b8a070] w-4 h-4" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#7a6a4a] w-4 h-4" />
             <input
               type="text"
               placeholder="Search by customer name or email"
-              className="w-full pl-10 pr-4 py-2 border border-[#d4af37]/20 bg-[#1a1a1a] text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent placeholder-[#b8a070]"
+              className="w-full pl-10 pr-4 py-2 border border-[#e8e0d0] bg-[#faf8f3] text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent placeholder-[#b0a080]"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -607,7 +638,7 @@ const executeExport = () => {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4 py-2 border border-[#d4af37]/20 bg-[#1a1a1a] text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent"
+            className="px-4 py-2 border border-[#e8e0d0] bg-[#faf8f3] text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent"
           >
             <option value="all">All order statuses</option>
             <option value="Pending">Pending</option>
@@ -619,7 +650,7 @@ const executeExport = () => {
           <select
             value={paymentStatusFilter}
             onChange={(e) => setPaymentStatusFilter(e.target.value)}
-            className="px-4 py-2 border border-[#d4af37]/20 bg-[#1a1a1a] text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent"
+            className="px-4 py-2 border border-[#e8e0d0] bg-[#faf8f3] text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent"
           >
             <option value="all">All payment statuses</option>
             <option value="paid">Paid</option>
@@ -633,7 +664,7 @@ const executeExport = () => {
     {/* Filter Button */}
     <button 
       onClick={() => setShowFilterModal(true)}
-      className="p-2 border border-[#d4af37]/20 text-[#f5e6d3] hover:bg-[#d4af37]/10 transition-colors"
+      className="p-2 border border-[#e8e0d0] text-[#1c1810] hover:bg-[#d4af37]/10 transition-colors"
     >
       <Filter className="w-4 h-4" />
     </button>
@@ -642,13 +673,13 @@ const executeExport = () => {
     <div className="relative">
       <button 
         onClick={() => setShowSortMenu(!showSortMenu)}
-        className="p-2 border border-[#d4af37]/20 text-[#f5e6d3] hover:bg-[#d4af37]/10 transition-colors"
+        className="p-2 border border-[#e8e0d0] text-[#1c1810] hover:bg-[#d4af37]/10 transition-colors"
       >
         <ArrowUpDown className="w-4 h-4" />
       </button>
 
       {showSortMenu && (
-        <div className="absolute top-full left-0 mt-2 w-64 bg-[#1a1a1a] border border-[#d4af37]/20 shadow-lg z-50">
+        <div className="absolute top-full left-0 mt-2 w-64 bg-[#faf8f3] border border-[#e8e0d0] shadow-lg z-50">
           {sortOptions.map((option) => (
             <button
               key={`${option.value}-${option.order}`}
@@ -656,7 +687,7 @@ const executeExport = () => {
               className={`w-full px-4 py-2 text-left text-sm hover:bg-[#d4af37]/10 transition-colors ${
                 sortBy === option.value && sortOrder === option.order
                   ? 'bg-[#d4af37]/20 text-[#d4af37]'
-                  : 'text-[#f5e6d3]'
+                  : 'text-[#1c1810]'
               }`}
             >
               {option.label}
@@ -669,7 +700,7 @@ const executeExport = () => {
     {/* Export Button */}
     <button 
       onClick={handleExport}
-      className="px-4 py-2 border border-[#d4af37]/20 text-[#f5e6d3] hover:bg-[#d4af37]/10 transition-colors flex items-center space-x-2"
+      className="px-4 py-2 border border-[#e8e0d0] text-[#1c1810] hover:bg-[#d4af37]/10 transition-colors flex items-center space-x-2"
     >
       <Download className="w-4 h-4" />
       <span>Export</span>
@@ -678,7 +709,7 @@ const executeExport = () => {
     {/* Summary Button */}
     <button 
       onClick={() => setShowSummary(true)}
-      className="px-4 py-2 border border-[#d4af37]/20 text-[#f5e6d3] hover:bg-[#d4af37]/10 transition-colors flex items-center space-x-2"
+      className="px-4 py-2 border border-[#e8e0d0] text-[#1c1810] hover:bg-[#d4af37]/10 transition-colors flex items-center space-x-2"
     >
       <FileText className="w-4 h-4" />
       <span>Summary</span>
@@ -690,7 +721,7 @@ const executeExport = () => {
     <button 
       onClick={() => setShowBulkEditModal(true)}
       disabled={selectedOrders.size === 0}
-      className="px-4 py-2 border border-[#d4af37]/20 text-[#f5e6d3] hover:bg-[#d4af37]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
+      className="px-4 py-2 border border-[#e8e0d0] text-[#1c1810] hover:bg-[#d4af37]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
     >
       <Edit className="w-4 h-4" />
       <span>Bulk edit</span>
@@ -711,13 +742,50 @@ const executeExport = () => {
 {/* EXPORT MODAL */}
 {showExportModal && (
   <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-    <div className="bg-[#1a1a1a] border border-[#d4af37]/20 p-6 w-full max-w-md">
+    <div className="bg-[#faf8f3] border border-[#e8e0d0] p-6 w-full max-w-md">
       <h2 className="text-xl font-bold text-[#d4af37] mb-4">Export Orders</h2>
-      
+
       <div className="space-y-4">
+        {/* Export Format Selection */}
+        <div>
+          <label className="block text-sm font-medium text-[#7a6a4a] mb-2">Export Format</label>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setExportOptions({ ...exportOptions, format: 'csv' })}
+              className={`flex items-center justify-center gap-2 p-3 rounded border-2 transition-all ${
+                exportOptions.format === 'csv'
+                  ? 'border-[#d4af37] bg-[#d4af37]/10 text-[#d4af37]'
+                  : 'border-[#e8e0d0] text-[#7a6a4a] hover:border-[#d4af37]/40'
+              }`}
+            >
+              <FileSpreadsheet className="w-5 h-5" />
+              <div className="text-left">
+                <div className="font-medium">CSV</div>
+                <div className="text-xs opacity-70">Spreadsheet</div>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setExportOptions({ ...exportOptions, format: 'pdf' })}
+              className={`flex items-center justify-center gap-2 p-3 rounded border-2 transition-all ${
+                exportOptions.format === 'pdf'
+                  ? 'border-[#d4af37] bg-[#d4af37]/10 text-[#d4af37]'
+                  : 'border-[#e8e0d0] text-[#7a6a4a] hover:border-[#d4af37]/40'
+              }`}
+            >
+              <FileText className="w-5 h-5" />
+              <div className="text-left">
+                <div className="font-medium">PDF</div>
+                <div className="text-xs opacity-70">Document</div>
+              </div>
+            </button>
+          </div>
+        </div>
+
         {/* Export Type Selection */}
         <div>
-          <label className="block text-sm font-medium text-[#b8a070] mb-2">Export Type</label>
+          <label className="block text-sm font-medium text-[#7a6a4a] mb-2">Export Type</label>
           <div className="space-y-2">
             <label className="flex items-center space-x-2 cursor-pointer">
               <input
@@ -728,7 +796,7 @@ const executeExport = () => {
                 onChange={(e) => setExportOptions({ ...exportOptions, exportType: e.target.value })}
                 className="w-4 h-4 accent-[#d4af37]"
               />
-              <span className="text-[#f5e6d3]">All orders ({data?.totalCount || 0})</span>
+              <span className="text-[#1c1810]">All orders ({data?.totalCount || 0})</span>
             </label>
             
             <label className="flex items-center space-x-2 cursor-pointer">
@@ -741,7 +809,7 @@ const executeExport = () => {
                 className="w-4 h-4 accent-[#d4af37]"
                 disabled={selectedOrders.size === 0}
               />
-              <span className={selectedOrders.size === 0 ? 'text-[#b8a070]/50' : 'text-[#f5e6d3]'}>
+              <span className={selectedOrders.size === 0 ? 'text-[#7a6a4a]/50' : 'text-[#1c1810]'}>
                 Selected orders ({selectedOrders.size})
               </span>
             </label>
@@ -755,39 +823,39 @@ const executeExport = () => {
                 onChange={(e) => setExportOptions({ ...exportOptions, exportType: e.target.value })}
                 className="w-4 h-4 accent-[#d4af37]"
               />
-              <span className="text-[#f5e6d3]">Date range</span>
+              <span className="text-[#1c1810]">Date range</span>
             </label>
           </div>
         </div>
 
         {/* Date Range Inputs (only show when daterange is selected) */}
         {exportOptions.exportType === 'daterange' && (
-          <div className="space-y-3 p-3 bg-[#0a0a0a] border border-[#d4af37]/10 rounded">
+          <div className="space-y-3 p-3 bg-white border border-[#d4af37]/10 rounded">
             <div>
-              <label className="block text-sm font-medium text-[#b8a070] mb-2">From Date</label>
+              <label className="block text-sm font-medium text-[#7a6a4a] mb-2">From Date</label>
               <input
                 type="date"
                 value={exportOptions.dateFrom}
                 onChange={(e) => setExportOptions({ ...exportOptions, dateFrom: e.target.value })}
-                className="w-full px-3 py-2 border border-[#d4af37]/20 bg-[#1a1a1a] text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                className="w-full px-3 py-2 border border-[#e8e0d0] bg-[#faf8f3] text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-[#b8a070] mb-2">To Date</label>
+              <label className="block text-sm font-medium text-[#7a6a4a] mb-2">To Date</label>
               <input
                 type="date"
                 value={exportOptions.dateTo}
                 onChange={(e) => setExportOptions({ ...exportOptions, dateTo: e.target.value })}
-                className="w-full px-3 py-2 border border-[#d4af37]/20 bg-[#1a1a1a] text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                className="w-full px-3 py-2 border border-[#e8e0d0] bg-[#faf8f3] text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
               />
             </div>
           </div>
         )}
 
         {/* Export Info */}
-        <div className="bg-[#d4af37]/10 border border-[#d4af37]/20 p-3 rounded">
-          <p className="text-xs text-[#b8a070]">
+        <div className="bg-[#d4af37]/10 border border-[#e8e0d0] p-3 rounded">
+          <p className="text-xs text-[#7a6a4a]">
             📄 Export will include: Order Number, Customer Name, Email, Amount, Status, Payment Status, Payment Method, Items, and Date
           </p>
         </div>
@@ -796,7 +864,7 @@ const executeExport = () => {
       <div className="flex justify-end space-x-3 mt-6">
         <button
           onClick={() => setShowExportModal(false)}
-          className="px-4 py-2 border border-[#d4af37]/20 text-[#f5e6d3] hover:bg-[#d4af37]/10 transition-colors"
+          className="px-4 py-2 border border-[#e8e0d0] text-[#1c1810] hover:bg-[#d4af37]/10 transition-colors"
         >
           Cancel
         </button>
@@ -804,8 +872,8 @@ const executeExport = () => {
           onClick={executeExport}
           className="px-4 py-2 bg-[#d4af37] text-[#0a0a0a] hover:bg-[#d4af37]/90 transition-colors flex items-center space-x-2"
         >
-          <Download className="w-4 h-4" />
-          <span>Export CSV</span>
+          {exportOptions.format === 'pdf' ? <FileText className="w-4 h-4" /> : <FileSpreadsheet className="w-4 h-4" />}
+          <span>Export {exportOptions.format.toUpperCase()}</span>
         </button>
       </div>
     </div>
@@ -814,16 +882,16 @@ const executeExport = () => {
       {/* FILTER MODAL */}
       {showFilterModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-[#1a1a1a] border border-[#d4af37]/20 p-6 w-full max-w-md">
+          <div className="bg-[#faf8f3] border border-[#e8e0d0] p-6 w-full max-w-md">
             <h2 className="text-xl font-bold text-[#d4af37] mb-4">Filter Orders</h2>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[#b8a070] mb-2">Order Status</label>
+                <label className="block text-sm font-medium text-[#7a6a4a] mb-2">Order Status</label>
                 <select
                   value={tempFilters.status}
                   onChange={(e) => setTempFilters({ ...tempFilters, status: e.target.value })}
-                  className="w-full px-3 py-2 border border-[#d4af37]/20 bg-[#0a0a0a] text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                  className="w-full px-3 py-2 border border-[#e8e0d0] bg-white text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                 >
                   <option value="all">All Statuses</option>
                   <option value="Pending">Pending</option>
@@ -835,11 +903,11 @@ const executeExport = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[#b8a070] mb-2">Payment Status</label>
+                <label className="block text-sm font-medium text-[#7a6a4a] mb-2">Payment Status</label>
                 <select
                   value={tempFilters.paymentStatus}
                   onChange={(e) => setTempFilters({ ...tempFilters, paymentStatus: e.target.value })}
-                  className="w-full px-3 py-2 border border-[#d4af37]/20 bg-[#0a0a0a] text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                  className="w-full px-3 py-2 border border-[#e8e0d0] bg-white text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                 >
                   <option value="all">All Payment Statuses</option>
                   <option value="paid">Paid</option>
@@ -853,13 +921,13 @@ const executeExport = () => {
             <div className="flex justify-end space-x-3 mt-6">
               <button
                 onClick={resetFilters}
-                className="px-4 py-2 border border-[#d4af37]/20 text-[#f5e6d3] hover:bg-[#d4af37]/10 transition-colors"
+                className="px-4 py-2 border border-[#e8e0d0] text-[#1c1810] hover:bg-[#d4af37]/10 transition-colors"
               >
                 Reset
               </button>
               <button
                 onClick={() => setShowFilterModal(false)}
-                className="px-4 py-2 border border-[#d4af37]/20 text-[#f5e6d3] hover:bg-[#d4af37]/10 transition-colors"
+                className="px-4 py-2 border border-[#e8e0d0] text-[#1c1810] hover:bg-[#d4af37]/10 transition-colors"
               >
                 Cancel
               </button>
@@ -879,7 +947,7 @@ const executeExport = () => {
         const summary = calculateSummary();
         return (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-[#1a1a1a] border border-[#d4af37]/20 p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="bg-[#faf8f3] border border-[#e8e0d0] p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
               <h2 className="text-xl font-bold text-[#d4af37] mb-4">
                 Orders Summary {selectedOrders.size > 0 && `(${selectedOrders.size} selected)`}
               </h2>
@@ -887,22 +955,22 @@ const executeExport = () => {
               {summary && (
                 <div className="space-y-6">
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-[#0a0a0a] border border-[#d4af37]/20 p-4">
-                      <div className="text-sm text-[#b8a070]">Total Orders</div>
+                    <div className="bg-white border border-[#e8e0d0] p-4">
+                      <div className="text-sm text-[#7a6a4a]">Total Orders</div>
                       <div className="text-2xl font-bold text-[#d4af37]">{summary.totalOrders}</div>
                     </div>
-                    <div className="bg-[#0a0a0a] border border-[#d4af37]/20 p-4">
-                      <div className="text-sm text-[#b8a070]">Total Revenue</div>
+                    <div className="bg-white border border-[#e8e0d0] p-4">
+                      <div className="text-sm text-[#7a6a4a]">Total Revenue</div>
                       <div className="text-2xl font-bold text-[#d4af37]">
                         {formatCurrency(summary.totalRevenue)}
                       </div>
                     </div>
-                    <div className="bg-[#0a0a0a] border border-[#d4af37]/20 p-4">
-                      <div className="text-sm text-[#b8a070]">Total Items</div>
+                    <div className="bg-white border border-[#e8e0d0] p-4">
+                      <div className="text-sm text-[#7a6a4a]">Total Items</div>
                       <div className="text-2xl font-bold text-[#d4af37]">{summary.totalItems}</div>
                     </div>
-                    <div className="bg-[#0a0a0a] border border-[#d4af37]/20 p-4">
-                      <div className="text-sm text-[#b8a070]">Avg Order</div>
+                    <div className="bg-white border border-[#e8e0d0] p-4">
+                      <div className="text-sm text-[#7a6a4a]">Avg Order</div>
                       <div className="text-2xl font-bold text-[#d4af37]">
                         {formatCurrency(summary.averageOrderValue)}
                       </div>
@@ -910,11 +978,11 @@ const executeExport = () => {
                   </div>
 
                   <div>
-                    <h3 className="text-lg font-semibold text-[#f5e6d3] mb-3">Order Status</h3>
+                    <h3 className="text-lg font-semibold text-[#1c1810] mb-3">Order Status</h3>
                     <div className="space-y-2">
                       {Object.entries(summary.statusBreakdown).map(([status, count]) => (
-                        <div key={status} className="flex justify-between bg-[#0a0a0a] border border-[#d4af37]/20 p-3">
-                          <span className="text-[#f5e6d3]">{status}</span>
+                        <div key={status} className="flex justify-between bg-white border border-[#e8e0d0] p-3">
+                          <span className="text-[#1c1810]">{status}</span>
                           <span className="text-[#d4af37] font-bold">{count}</span>
                         </div>
                       ))}
@@ -939,18 +1007,18 @@ const executeExport = () => {
       {/* BULK EDIT MODAL */}
       {showBulkEditModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-[#1a1a1a] border border-[#d4af37]/20 p-6 w-full max-w-md">
+          <div className="bg-[#faf8f3] border border-[#e8e0d0] p-6 w-full max-w-md">
             <h2 className="text-xl font-bold text-[#d4af37] mb-4">
               Bulk Edit ({selectedOrders.size} orders)
             </h2>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[#b8a070] mb-2">Update Order Status</label>
+                <label className="block text-sm font-medium text-[#7a6a4a] mb-2">Update Order Status</label>
                 <select
                   value={bulkAction.updateStatus}
                   onChange={(e) => setBulkAction({ ...bulkAction, updateStatus: e.target.value })}
-                  className="w-full px-3 py-2 border border-[#d4af37]/20 bg-[#0a0a0a] text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                  className="w-full px-3 py-2 border border-[#e8e0d0] bg-white text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                 >
                   <option value="">Don't change</option>
                   <option value="Pending">Pending</option>
@@ -962,11 +1030,11 @@ const executeExport = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[#b8a070] mb-2">Update Payment Status</label>
+                <label className="block text-sm font-medium text-[#7a6a4a] mb-2">Update Payment Status</label>
                 <select
                   value={bulkAction.updatePaymentStatus}
                   onChange={(e) => setBulkAction({ ...bulkAction, updatePaymentStatus: e.target.value })}
-                  className="w-full px-3 py-2 border border-[#d4af37]/20 bg-[#0a0a0a] text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                  className="w-full px-3 py-2 border border-[#e8e0d0] bg-white text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                 >
                   <option value="">Don't change</option>
                   <option value="paid">Paid</option>
@@ -980,7 +1048,7 @@ const executeExport = () => {
             <div className="flex justify-end space-x-3 mt-6">
               <button
                 onClick={() => setShowBulkEditModal(false)}
-                className="px-4 py-2 border border-[#d4af37]/20 text-[#f5e6d3] hover:bg-[#d4af37]/10 transition-colors"
+                className="px-4 py-2 border border-[#e8e0d0] text-[#1c1810] hover:bg-[#d4af37]/10 transition-colors"
               >
                 Cancel
               </button>
@@ -998,49 +1066,49 @@ const executeExport = () => {
       {/* CREATE ORDER MODAL */}
       {showCreateOrderModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-[#1a1a1a] border border-[#d4af37]/20 p-6 w-full max-w-md">
+          <div className="bg-[#faf8f3] border border-[#e8e0d0] p-6 w-full max-w-md">
             <h2 className="text-xl font-bold text-[#d4af37] mb-4">Create New Order</h2>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[#b8a070] mb-2">Customer Email *</label>
+                <label className="block text-sm font-medium text-[#7a6a4a] mb-2">Customer Email *</label>
                 <input
                   type="email"
                   value={newOrder.customerEmail}
                   onChange={(e) => setNewOrder({ ...newOrder, customerEmail: e.target.value })}
                   placeholder="customer@example.com"
-                  className="w-full px-3 py-2 border border-[#d4af37]/20 bg-[#0a0a0a] text-[#f5e6d3] placeholder-[#b8a070] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                  className="w-full px-3 py-2 border border-[#e8e0d0] bg-white text-[#1c1810] placeholder-[#b0a080] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[#b8a070] mb-2">Customer Name</label>
+                <label className="block text-sm font-medium text-[#7a6a4a] mb-2">Customer Name</label>
                 <input
                   type="text"
                   value={newOrder.customerName}
                   onChange={(e) => setNewOrder({ ...newOrder, customerName: e.target.value })}
                   placeholder="John Doe"
-                  className="w-full px-3 py-2 border border-[#d4af37]/20 bg-[#0a0a0a] text-[#f5e6d3] placeholder-[#b8a070] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                  className="w-full px-3 py-2 border border-[#e8e0d0] bg-white text-[#1c1810] placeholder-[#b0a080] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[#b8a070] mb-2">Amount (PHP) *</label>
+                <label className="block text-sm font-medium text-[#7a6a4a] mb-2">Amount (PHP) *</label>
                 <input
                   type="number"
                   value={newOrder.amount}
                   onChange={(e) => setNewOrder({ ...newOrder, amount: e.target.value })}
                   placeholder="1000"
-                  className="w-full px-3 py-2 border border-[#d4af37]/20 bg-[#0a0a0a] text-[#f5e6d3] placeholder-[#b8a070] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                  className="w-full px-3 py-2 border border-[#e8e0d0] bg-white text-[#1c1810] placeholder-[#b0a080] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[#b8a070] mb-2">Order Status</label>
+                <label className="block text-sm font-medium text-[#7a6a4a] mb-2">Order Status</label>
                 <select
                   value={newOrder.status}
                   onChange={(e) => setNewOrder({ ...newOrder, status: e.target.value })}
-                  className="w-full px-3 py-2 border border-[#d4af37]/20 bg-[#0a0a0a] text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                  className="w-full px-3 py-2 border border-[#e8e0d0] bg-white text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                 >
                   <option value="Pending">Pending</option>
                   <option value="Processing">Processing</option>
@@ -1050,11 +1118,11 @@ const executeExport = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[#b8a070] mb-2">Payment Method</label>
+                <label className="block text-sm font-medium text-[#7a6a4a] mb-2">Payment Method</label>
                 <select
                   value={newOrder.paymentMethod}
                   onChange={(e) => setNewOrder({ ...newOrder, paymentMethod: e.target.value })}
-                  className="w-full px-3 py-2 border border-[#d4af37]/20 bg-[#0a0a0a] text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                  className="w-full px-3 py-2 border border-[#e8e0d0] bg-white text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                 >
                   <option value="gcash">GCash</option>
                   <option value="paymaya">PayMaya</option>
@@ -1067,7 +1135,7 @@ const executeExport = () => {
             <div className="flex justify-end space-x-3 mt-6">
               <button
                 onClick={() => setShowCreateOrderModal(false)}
-                className="px-4 py-2 border border-[#d4af37]/20 text-[#f5e6d3] hover:bg-[#d4af37]/10 transition-colors"
+                className="px-4 py-2 border border-[#e8e0d0] text-[#1c1810] hover:bg-[#d4af37]/10 transition-colors"
               >
                 Cancel
               </button>
@@ -1089,14 +1157,14 @@ const executeExport = () => {
 </div>
 
       {/* Orders Table */}
-      <div className="bg-[#1a1a1a] border border-[#d4af37]/20">
-        <div className="px-6 py-4 border-b border-[#d4af37]/20">
+      <div className="bg-[#faf8f3] border border-[#e8e0d0]">
+        <div className="px-6 py-4 border-b border-[#e8e0d0]">
           <h2 className="text-lg font-medium text-[#d4af37]">Orders</h2>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[calc(100vh-380px)] overflow-y-auto">
           <table className="w-full">
-            <thead className="bg-[#0a0a0a] border-b border-[#d4af37]/20">
+            <thead className="bg-white border-b border-[#e8e0d0] sticky top-0 z-10">
               <tr>
                 <th className="px-6 py-3 text-left">
                   <input
@@ -1111,7 +1179,7 @@ const executeExport = () => {
                   />
                 </th>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-[#b8a070] uppercase tracking-wider cursor-pointer hover:bg-[#d4af37]/5"
+                  className="px-6 py-3 text-left text-xs font-medium text-[#7a6a4a] uppercase tracking-wider cursor-pointer hover:bg-[#d4af37]/5"
                   onClick={() => handleSort("created_at")}
                 >
                   Order
@@ -1127,7 +1195,7 @@ const executeExport = () => {
                   )}
                 </th>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-[#b8a070] uppercase tracking-wider cursor-pointer hover:bg-[#d4af37]/5"
+                  className="px-6 py-3 text-left text-xs font-medium text-[#7a6a4a] uppercase tracking-wider cursor-pointer hover:bg-[#d4af37]/5"
                   onClick={() => handleSort("customer_name")}
                 >
                   Customer
@@ -1143,7 +1211,7 @@ const executeExport = () => {
                   )}
                 </th>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-[#b8a070] uppercase tracking-wider cursor-pointer hover:bg-[#d4af37]/5"
+                  className="px-6 py-3 text-left text-xs font-medium text-[#7a6a4a] uppercase tracking-wider cursor-pointer hover:bg-[#d4af37]/5"
                   onClick={() => handleSort("amount")}
                 >
                   Total
@@ -1159,7 +1227,7 @@ const executeExport = () => {
                   )}
                 </th>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-[#b8a070] uppercase tracking-wider cursor-pointer hover:bg-[#d4af37]/5"
+                  className="px-6 py-3 text-left text-xs font-medium text-[#7a6a4a] uppercase tracking-wider cursor-pointer hover:bg-[#d4af37]/5"
                   onClick={() => handleSort("payment_status")}
                 >
                   Payment Status
@@ -1174,14 +1242,14 @@ const executeExport = () => {
                     <ArrowUpDown className="inline w-3 h-3 ml-1 opacity-30" />
                   )}
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-[#b8a070] uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#7a6a4a] uppercase tracking-wider">
                   Fulfillment
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-[#b8a070] uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#7a6a4a] uppercase tracking-wider">
                   Items
                 </th>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-[#b8a070] uppercase tracking-wider cursor-pointer hover:bg-[#d4af37]/5"
+                  className="px-6 py-3 text-left text-xs font-medium text-[#7a6a4a] uppercase tracking-wider cursor-pointer hover:bg-[#d4af37]/5"
                   onClick={() => handleSort("created_at")}
                 >
                   Date
@@ -1196,12 +1264,12 @@ const executeExport = () => {
                     <ArrowUpDown className="inline w-3 h-3 ml-1 opacity-30" />
                   )}
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-[#b8a070] uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#7a6a4a] uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-[#1a1a1a] divide-y divide-[#d4af37]/10">
+            <tbody className="bg-[#faf8f3] divide-y divide-[#d4af37]/10">
               {isLoading ? (
                 Array.from({ length: 10 }).map((_, index) => (
                   <OrderRowSkeleton key={index} />
@@ -1210,7 +1278,7 @@ const executeExport = () => {
                 <tr>
                   <td
                     colSpan={9}
-                    className="px-6 py-12 text-center text-[#b8a070]"
+                    className="px-6 py-12 text-center text-[#7a6a4a]"
                   >
                     No orders found
                   </td>
@@ -1233,12 +1301,12 @@ const executeExport = () => {
                           className="w-4 h-4 accent-[#d4af37]"
                         />
                       </td>
-                      <td className="px-6 py-4 text-sm text-[#f5e6d3]">
+                      <td className="px-6 py-4 text-sm text-[#1c1810]">
                         {order.orderNumber}
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-sm text-[#f5e6d3]">{order.customerName}</div>
-                        <div className="text-xs text-[#b8a070]">{order.customerEmail}</div>
+                        <div className="text-sm text-[#1c1810]">{order.customerName}</div>
+                        <div className="text-xs text-[#7a6a4a]">{order.customerEmail}</div>
                       </td>
                       <td className="px-6 py-4 text-sm font-medium text-[#d4af37]">
                         {formatCurrency(order.amount)}
@@ -1253,14 +1321,14 @@ const executeExport = () => {
                           {fulfillmentStatus.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm text-[#f5e6d3]">
+                      <td className="px-6 py-4 text-sm text-[#1c1810]">
                         {order.itemCount} item{order.itemCount !== 1 ? "s" : ""}
                       </td>
-                      <td className="px-6 py-4 text-sm text-[#b8a070]">
+                      <td className="px-6 py-4 text-sm text-[#7a6a4a]">
                         {formatDate(order.createdAt)}
                       </td>
                       <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                        <button className="p-1 hover:bg-[#d4af37]/10 rounded transition-colors text-[#f5e6d3]">
+                        <button className="p-1 hover:bg-[#d4af37]/10 rounded transition-colors text-[#1c1810]">
                           <MoreHorizontal className="w-5 h-5" />
                         </button>
                       </td>
@@ -1274,22 +1342,22 @@ const executeExport = () => {
 
         {/* Pagination */}
         {data && data.totalPages > 1 && (
-          <div className="px-6 py-4 border-t border-[#d4af37]/20 flex items-center justify-between">
-            <div className="text-sm text-[#b8a070]">
+          <div className="px-6 py-4 border-t border-[#e8e0d0] flex items-center justify-between">
+            <div className="text-sm text-[#7a6a4a]">
               Page {data.currentPage} of {data.totalPages}
             </div>
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                 disabled={currentPage === 1}
-                className="px-3 py-1 border border-[#d4af37]/20 text-[#f5e6d3] hover:bg-[#d4af37]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-3 py-1 border border-[#e8e0d0] text-[#1c1810] hover:bg-[#d4af37]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Previous
               </button>
               <button
                 onClick={() => setCurrentPage(Math.min(data.totalPages, currentPage + 1))}
                 disabled={currentPage === data.totalPages}
-                className="px-3 py-1 border border-[#d4af37]/20 text-[#f5e6d3] hover:bg-[#d4af37]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-3 py-1 border border-[#e8e0d0] text-[#1c1810] hover:bg-[#d4af37]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Next
               </button>

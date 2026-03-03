@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { ArrowLeft, Copy, ExternalLink, ChevronRight, MoreHorizontal, Package, Truck, X } from "lucide-react";
 import CustomSidebar from "@/components/modals/sidebar";
-import LalaMoveSidebar from "@/components/admin/sidebars/lalamovesidebar";
+import JntSidebar from "@/components/admin/sidebars/jntsidebar";
 
 interface PaymentInfo {
   paymentId: string;
@@ -37,6 +37,30 @@ interface Order {
   trackingNumber?: string;
   courier?: string;
   paymentLink?: string;
+  deliveryAddress?: string;
+  deliveryLocation?: {
+    address?: string;
+    region?: { name: string };
+    province?: { name: string };
+    city?: { name: string };
+    barangay?: { name: string };
+    street_address?: string;
+    recipient_name?: string;
+    phone_number?: string;
+    latitude?: number;
+    longitude?: number;
+    courier_info?: {
+      waybill_number?: string;
+      courier_code?: string;
+      courier_name?: string;
+      shipping_fee?: number;
+      estimated_delivery?: string;
+    };
+  };
+  waybillNumber?: string;
+  courierCode?: string;
+  shippingFee?: number;
+  estimatedDelivery?: string;
 }
 
 interface OrderDetailsProps {
@@ -83,7 +107,7 @@ const getStatusColor = (status: string) => {
     case 'refunded':
       return 'bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/30';
     default:
-      return 'bg-[#d4af37]/10 text-[#b8a070] border border-[#d4af37]/30';
+      return 'bg-[#d4af37]/10 text-[#7a6a4a] border border-[#d4af37]/30';
   }
 };
 
@@ -98,7 +122,7 @@ const getFulfillmentStatus = (orderStatus: string) => {
     case 'Cancelled':
       return { status: 'CANCELLED', color: 'bg-red-900/20 text-red-400 border border-red-400/30' };
     default:
-      return { status: 'UNFULFILLED', color: 'bg-[#d4af37]/10 text-[#b8a070] border border-[#d4af37]/30' };
+      return { status: 'UNFULFILLED', color: 'bg-[#d4af37]/10 text-[#7a6a4a] border border-[#d4af37]/30' };
   }
 };
 
@@ -106,14 +130,14 @@ const Skeleton = ({ className }: { className?: string }) => (
   <div className={`animate-pulse bg-[#d4af37]/10 rounded ${className}`}></div>
 );
 
-const OrderActionsDropdown = ({ 
-  order, 
-  onStatusUpdate, 
-  onOpenLalaMoveSidebar 
-}: { 
-  order: Order; 
+const OrderActionsDropdown = ({
+  order,
+  onStatusUpdate,
+  onOpenJntSidebar
+}: {
+  order: Order;
   onStatusUpdate: (newStatus: string) => void;
-  onOpenLalaMoveSidebar: () => void;
+  onOpenJntSidebar: () => void;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -161,7 +185,7 @@ const OrderActionsDropdown = ({
           <button
             onClick={handleProcessOrder}
             disabled={isUpdating}
-            className="w-full text-left px-4 py-2 text-sm text-[#f5e6d3] hover:bg-[#d4af37]/10 flex items-center gap-2 disabled:opacity-50 transition-colors"
+            className="w-full text-left px-4 py-2 text-sm text-[#1c1810] hover:bg-[#d4af37]/10 flex items-center gap-2 disabled:opacity-50 transition-colors"
           >
             <Package size={16} />
             {isUpdating ? 'Processing...' : 'Process Order'}
@@ -170,20 +194,26 @@ const OrderActionsDropdown = ({
       
       case 'Processing':
         return (
-          <button
-            onClick={() => {
-              setIsOpen(false);
-            }}
-            className="w-full text-left px-4 py-2 text-sm text-[#f5e6d3] hover:bg-[#d4af37]/10 flex items-center gap-2 transition-colors"
-          >
-            <Truck size={16} />
-            Send with courier
-          </button>
+          <>
+            <div className="px-4 py-2 text-xs text-[#7a6a4a] font-semibold border-b border-[#d4af37]/10">
+              SHIP WITH COURIER
+            </div>
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                onOpenJntSidebar();
+              }}
+              className="w-full text-left px-4 py-2 text-sm text-[#1c1810] hover:bg-red-500/10 flex items-center gap-2 transition-colors"
+            >
+              <Truck size={16} className="text-red-500" />
+              <span>J&T Express</span>
+            </button>
+          </>
         );
       
       default:
         return (
-          <div className="px-4 py-2 text-sm text-[#b8a070]">
+          <div className="px-4 py-2 text-sm text-[#7a6a4a]">
             No actions available
           </div>
         );
@@ -194,13 +224,13 @@ const OrderActionsDropdown = ({
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="p-2 hover:bg-[#d4af37]/10 rounded-lg transition-colors text-[#f5e6d3]"
+        className="p-2 hover:bg-[#d4af37]/10 rounded-lg transition-colors text-[#1c1810]"
       >
         <MoreHorizontal size={20} />
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-48 bg-[#1a1a1a] border border-[#d4af37]/20 rounded-lg shadow-lg z-50">
+        <div className="absolute right-0 mt-2 w-48 bg-[#faf8f3] border border-[#e8e0d0] rounded-lg shadow-lg z-50">
           <div className="py-1">
             {renderDropdownItems()}
           </div>
@@ -212,7 +242,7 @@ const OrderActionsDropdown = ({
 
 export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsProps) {
   const [currentOrder, setCurrentOrder] = useState(order);
-  const [isLalaMoveSidebarOpen, setIsLalaMoveSidebarOpen] = useState(false);
+  const [isJntSidebarOpen, setIsJntSidebarOpen] = useState(false);
   const [internalNote, setInternalNote] = useState(order?.note || '');
 
   useEffect(() => {
@@ -232,7 +262,7 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
 
   if (isLoading) {
     return (
-      <div className="bg-[#0a0a0a] min-h-screen">
+      <div className="bg-white min-h-screen">
         <div className="max-w-7xl mx-auto p-6 space-y-6">
           <div className="flex items-center gap-4">
             <Skeleton className="w-20 h-8" />
@@ -244,7 +274,7 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6">
-              <div className="bg-[#1a1a1a] p-6 rounded-lg border border-[#d4af37]/20">
+              <div className="bg-[#faf8f3] p-6 rounded-lg border border-[#e8e0d0]">
                 <Skeleton className="w-32 h-6 mb-4" />
                 <div className="space-y-4">
                   <Skeleton className="w-full h-16" />
@@ -254,7 +284,7 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
             </div>
             
             <div className="space-y-6">
-              <div className="bg-[#1a1a1a] p-6 rounded-lg border border-[#d4af37]/20">
+              <div className="bg-[#faf8f3] p-6 rounded-lg border border-[#e8e0d0]">
                 <Skeleton className="w-24 h-6 mb-4" />
                 <div className="space-y-2">
                   <Skeleton className="w-full h-4" />
@@ -271,15 +301,15 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
 
   if (!currentOrder) {
     return (
-      <div className="p-6 bg-[#0a0a0a] min-h-screen">
+      <div className="p-6 bg-white min-h-screen">
         <button 
           onClick={onBack}
-          className="flex items-center gap-2 text-[#b8a070] hover:text-[#d4af37] mb-6 transition-colors"
+          className="flex items-center gap-2 text-[#7a6a4a] hover:text-[#d4af37] mb-6 transition-colors"
         >
           <ArrowLeft size={20} />
           Back to orders
         </button>
-        <div className="text-center text-[#b8a070]">Order not found</div>
+        <div className="text-center text-[#7a6a4a]">Order not found</div>
       </div>
     );
   }
@@ -288,46 +318,46 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
 
   return (
     <>
-      <div className="bg-[#0a0a0a] min-h-screen">
+      <div className="bg-white min-h-screen">
         <div className="max-w-7xl mx-auto p-6 space-y-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button 
                 onClick={onBack}
-                className="flex items-center gap-2 text-[#b8a070] hover:text-[#d4af37] transition-colors"
+                className="flex items-center gap-2 text-[#7a6a4a] hover:text-[#d4af37] transition-colors"
               >
                 <ArrowLeft size={20} />
                 Back
               </button>
               <div>
                 <h1 className="text-2xl font-bold text-[#d4af37]">Order {currentOrder.orderNumber}</h1>
-                <p className="text-[#b8a070]">{formatDate(currentOrder.createdAt)}</p>
+                <p className="text-[#7a6a4a]">{formatDate(currentOrder.createdAt)}</p>
               </div>
             </div>
             <OrderActionsDropdown
               order={currentOrder}
               onStatusUpdate={handleStatusUpdate}
-              onOpenLalaMoveSidebar={() => setIsLalaMoveSidebarOpen(true)}
+              onOpenJntSidebar={() => setIsJntSidebarOpen(true)}
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-[#1a1a1a] p-4 rounded-lg border border-[#d4af37]/20">
-              <div className="text-sm text-[#b8a070] mb-1">Order Status</div>
+            <div className="bg-[#faf8f3] p-4 rounded-lg border border-[#e8e0d0]">
+              <div className="text-sm text-[#7a6a4a] mb-1">Order Status</div>
               <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(currentOrder.status)}`}>
                 {currentOrder.status}
               </span>
             </div>
             
-            <div className="bg-[#1a1a1a] p-4 rounded-lg border border-[#d4af37]/20">
-              <div className="text-sm text-[#b8a070] mb-1">Payment Status</div>
+            <div className="bg-[#faf8f3] p-4 rounded-lg border border-[#e8e0d0]">
+              <div className="text-sm text-[#7a6a4a] mb-1">Payment Status</div>
               <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(currentOrder.payment?.paymentStatus || 'unpaid')}`}>
                 {currentOrder.payment?.paymentStatus || 'Unpaid'}
               </span>
             </div>
             
-            <div className="bg-[#1a1a1a] p-4 rounded-lg border border-[#d4af37]/20">
-              <div className="text-sm text-[#b8a070] mb-1">Fulfillment</div>
+            <div className="bg-[#faf8f3] p-4 rounded-lg border border-[#e8e0d0]">
+              <div className="text-sm text-[#7a6a4a] mb-1">Fulfillment</div>
               <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${fulfillment.color}`}>
                 {fulfillment.status}
               </span>
@@ -336,65 +366,65 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6">
-              <div className="bg-[#1a1a1a] rounded-lg border border-[#d4af37]/20">
-                <div className="p-6 border-b border-[#d4af37]/20">
+              <div className="bg-[#faf8f3] rounded-lg border border-[#e8e0d0]">
+                <div className="p-6 border-b border-[#e8e0d0]">
                   <h2 className="text-lg font-semibold text-[#d4af37]">Order Items ({currentOrder.itemCount})</h2>
                 </div>
                 <div className="divide-y divide-[#d4af37]/10">
                   {currentOrder.items.map((item, index) => (
                     <div key={index} className="p-6 flex justify-between items-start">
                       <div className="flex-1">
-                        <h3 className="font-medium text-[#f5e6d3]">{item.productName}</h3>
+                        <h3 className="font-medium text-[#1c1810]">{item.productName}</h3>
                         {item.size && (
-                          <p className="text-sm text-[#b8a070] mt-1">Size: {item.size}</p>
+                          <p className="text-sm text-[#7a6a4a] mt-1">Size: {item.size}</p>
                         )}
-                        <p className="text-sm text-[#b8a070] mt-1">Quantity: {item.quantity}</p>
+                        <p className="text-sm text-[#7a6a4a] mt-1">Quantity: {item.quantity}</p>
                       </div>
                       <div className="text-right">
                         <p className="font-medium text-[#d4af37]">{formatCurrency(item.itemAmount)}</p>
-                        <p className="text-sm text-[#b8a070]">{formatCurrency(item.itemAmount / item.quantity)} each</p>
+                        <p className="text-sm text-[#7a6a4a]">{formatCurrency(item.itemAmount / item.quantity)} each</p>
                       </div>
                     </div>
                   ))}
                 </div>
-                <div className="p-6 border-t border-[#d4af37]/20 bg-[#0a0a0a]">
+                <div className="p-6 border-t border-[#e8e0d0] bg-white">
                   <div className="flex justify-between items-center font-semibold text-lg">
-                    <span className="text-[#f5e6d3]">Total</span>
+                    <span className="text-[#1c1810]">Total</span>
                     <span className="text-[#d4af37]">{formatCurrency(currentOrder.amount)}</span>
                   </div>
                 </div>
               </div>
 
               {currentOrder.payment && (
-                <div className="bg-[#1a1a1a] rounded-lg border border-[#d4af37]/20">
-                  <div className="p-6 border-b border-[#d4af37]/20">
+                <div className="bg-[#faf8f3] rounded-lg border border-[#e8e0d0]">
+                  <div className="p-6 border-b border-[#e8e0d0]">
                     <h2 className="text-lg font-semibold text-[#d4af37]">Payment Information</h2>
                   </div>
                   <div className="p-6 space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <p className="text-sm text-[#b8a070]">Payment ID</p>
+                        <p className="text-sm text-[#7a6a4a]">Payment ID</p>
                         <div className="flex items-center gap-2">
-                          <p className="font-mono text-sm text-[#f5e6d3]">{currentOrder.payment.paymentId}</p>
+                          <p className="font-mono text-sm text-[#1c1810]">{currentOrder.payment.paymentId}</p>
                           <button
                             onClick={() => copyToClipboard(currentOrder.payment?.paymentId || '')}
-                            className="text-[#b8a070] hover:text-[#d4af37] transition-colors"
+                            className="text-[#7a6a4a] hover:text-[#d4af37] transition-colors"
                           >
                             <Copy size={16} />
                           </button>
                         </div>
                       </div>
                       <div>
-                        <p className="text-sm text-[#b8a070]">Payment Method</p>
-                        <p className="font-medium text-[#f5e6d3]">{currentOrder.payment.paymentMethod}</p>
+                        <p className="text-sm text-[#7a6a4a]">Payment Method</p>
+                        <p className="font-medium text-[#1c1810]">{currentOrder.payment.paymentMethod}</p>
                       </div>
                       <div>
-                        <p className="text-sm text-[#b8a070]">Amount</p>
+                        <p className="text-sm text-[#7a6a4a]">Amount</p>
                         <p className="font-medium text-[#d4af37]">{formatCurrency(currentOrder.payment.paymentAmount)} {currentOrder.payment.currency}</p>
                       </div>
                       <div>
-                        <p className="text-sm text-[#b8a070]">Payment Date</p>
-                        <p className="font-medium text-[#f5e6d3]">{formatDate(currentOrder.payment.paymentCreatedAt)}</p>
+                        <p className="text-sm text-[#7a6a4a]">Payment Date</p>
+                        <p className="font-medium text-[#1c1810]">{formatDate(currentOrder.payment.paymentCreatedAt)}</p>
                       </div>
                     </div>
                   </div>
@@ -403,37 +433,37 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
             </div>
 
             <div className="space-y-6">
-              <div className="bg-[#1a1a1a] rounded-lg border border-[#d4af37]/20">
-                <div className="p-6 border-b border-[#d4af37]/20">
+              <div className="bg-[#faf8f3] rounded-lg border border-[#e8e0d0]">
+                <div className="p-6 border-b border-[#e8e0d0]">
                   <h2 className="text-lg font-semibold text-[#d4af37]">Customer</h2>
                 </div>
                 <div className="p-6 space-y-4">
                   <div>
-                    <p className="text-sm text-[#b8a070]">Name</p>
-                    <p className="font-medium text-[#f5e6d3]">{currentOrder.customerName}</p>
+                    <p className="text-sm text-[#7a6a4a]">Name</p>
+                    <p className="font-medium text-[#1c1810]">{currentOrder.customerName}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-[#b8a070]">Email</p>
-                    <p className="font-medium text-[#f5e6d3]">{currentOrder.customerEmail}</p>
+                    <p className="text-sm text-[#7a6a4a]">Email</p>
+                    <p className="font-medium text-[#1c1810]">{currentOrder.customerEmail}</p>
                   </div>
                   {currentOrder.customerPhone && (
                     <div>
-                      <p className="text-sm text-[#b8a070]">Phone</p>
-                      <p className="font-medium text-[#f5e6d3]">{currentOrder.customerPhone}</p>
+                      <p className="text-sm text-[#7a6a4a]">Phone</p>
+                      <p className="font-medium text-[#1c1810]">{currentOrder.customerPhone}</p>
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="bg-[#1a1a1a] rounded-lg border border-[#d4af37]/20">
-                <div className="p-6 border-b border-[#d4af37]/20">
+              <div className="bg-[#faf8f3] rounded-lg border border-[#e8e0d0]">
+                <div className="p-6 border-b border-[#e8e0d0]">
                   <h2 className="text-lg font-semibold text-[#d4af37]">Internal Notes</h2>
                 </div>
                 <div className="p-6">
                   <textarea
                     value={internalNote}
                     onChange={(e) => setInternalNote(e.target.value)}
-                    className="w-full p-3 border border-[#d4af37]/20 bg-[#0a0a0a] text-[#f5e6d3] placeholder-[#b8a070] rounded-lg focus:ring-2 focus:ring-[#d4af37] focus:border-transparent"
+                    className="w-full p-3 border border-[#e8e0d0] bg-white text-[#1c1810] placeholder-[#b8a070] rounded-lg focus:ring-2 focus:ring-[#d4af37] focus:border-transparent"
                     rows={4}
                     placeholder="Add internal notes about this order..."
                   />
@@ -444,19 +474,19 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
               </div>
 
               {(currentOrder.status === 'Shipped' || currentOrder.status === 'Delivered') && (
-                <div className="bg-[#1a1a1a] rounded-lg border border-[#d4af37]/20">
-                  <div className="p-6 border-b border-[#d4af37]/20">
+                <div className="bg-[#faf8f3] rounded-lg border border-[#e8e0d0]">
+                  <div className="p-6 border-b border-[#e8e0d0]">
                     <h2 className="text-lg font-semibold text-[#d4af37]">Tracking Information</h2>
                   </div>
                   <div className="p-6 space-y-4">
                     {currentOrder.trackingNumber && (
                       <div>
-                        <p className="text-sm text-[#b8a070]">Tracking Number</p>
+                        <p className="text-sm text-[#7a6a4a]">Tracking Number</p>
                         <div className="flex items-center gap-2">
-                          <p className="font-mono text-sm text-[#f5e6d3]">{currentOrder.trackingNumber}</p>
+                          <p className="font-mono text-sm text-[#1c1810]">{currentOrder.trackingNumber}</p>
                           <button
                             onClick={() => copyToClipboard(currentOrder.trackingNumber || '')}
-                            className="text-[#b8a070] hover:text-[#d4af37] transition-colors"
+                            className="text-[#7a6a4a] hover:text-[#d4af37] transition-colors"
                           >
                             <Copy size={16} />
                           </button>
@@ -465,8 +495,8 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
                     )}
                     {currentOrder.courier && (
                       <div>
-                        <p className="text-sm text-[#b8a070]">Courier</p>
-                        <p className="font-medium text-[#f5e6d3]">{currentOrder.courier}</p>
+                        <p className="text-sm text-[#7a6a4a]">Courier</p>
+                        <p className="font-medium text-[#1c1810]">{currentOrder.courier}</p>
                       </div>
                     )}
                   </div>
@@ -478,13 +508,13 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
       </div>
 
       <CustomSidebar
-        isOpen={isLalaMoveSidebarOpen}
-        onClose={() => setIsLalaMoveSidebarOpen(false)}
-        title="Send with LalaMove"
+        isOpen={isJntSidebarOpen}
+        onClose={() => setIsJntSidebarOpen(false)}
+        title="Ship with J&T Express"
       >
-        <LalaMoveSidebar
+        <JntSidebar
           order={currentOrder}
-          onClose={() => setIsLalaMoveSidebarOpen(false)}
+          onClose={() => setIsJntSidebarOpen(false)}
           onStatusUpdate={handleStatusUpdate}
         />
       </CustomSidebar>

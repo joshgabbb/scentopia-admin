@@ -7,6 +7,12 @@ interface Category {
   name: string;
 }
 
+interface Size {
+  id: string;
+  name: string;
+  is_active: boolean;
+}
+
 interface Product {
   id: string;
   name: string;
@@ -18,7 +24,6 @@ interface Product {
   perfumeType: "Basic" | "Premium";
   isActive: boolean;
   category: Category | null;
-  genderTags: string[];
   occasionsTags: string[];
   weatherTags: string[];
   topNotesTags: string[];
@@ -34,13 +39,19 @@ interface AddProductProps {
   onProductAdd: (product: Product) => void;
 }
 
-const GENDER_OPTIONS = ["Men", "Women", "Unisex"];
-const OCCASION_OPTIONS = ["Everyday/Casual", "Work/Professional", "Gym/Sports", "Date Night/Intimate", "Formal"];
-const WEATHER_OPTIONS = ["Warm", "Cool", "Rainy"];
-const TOP_NOTES_OPTIONS = ["Fruity", "Floral", "Citrus", "Woody", "Spicy", "Herbal"];
-const OTHER_OPTIONS = ["Best Sellers", "Assorted"];
+// Default fallback options if API fails
+const DEFAULT_OCCASION_OPTIONS = ["Everyday/Casual", "Work/Professional", "Gym/Sports", "Date Night/Intimate", "Formal"];
+const DEFAULT_WEATHER_OPTIONS = ["Warm", "Cool", "Rainy"];
+const DEFAULT_TOP_NOTES_OPTIONS = ["Fruity", "Floral", "Citrus", "Woody", "Spicy", "Herbal"];
+const DEFAULT_OTHER_OPTIONS = ["Best Sellers", "Assorted"];
 const PRICE_OPTIONS = [250, 350, 450];
-const SIZE_OPTIONS = ["50", "85"];
+
+interface TagOptions {
+  occasion: string[];
+  weather: string[];
+  top_notes: string[];
+  other: string[];
+}
 
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-PH', {
@@ -51,13 +62,19 @@ const formatCurrency = (amount: number) => {
 
 export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [sizeOptions, setSizeOptions] = useState<Size[]>([]);
+  const [tagOptions, setTagOptions] = useState<TagOptions>({
+    occasion: DEFAULT_OCCASION_OPTIONS,
+    weather: DEFAULT_WEATHER_OPTIONS,
+    top_notes: DEFAULT_TOP_NOTES_OPTIONS,
+    other: DEFAULT_OTHER_OPTIONS
+  });
   const [formData, setFormData] = useState({
     name: "",
     description: "",
     categoryId: "",
     perfumeType: "Basic" as "Basic" | "Premium",
     isActive: true,
-    genderTags: [] as string[],
     occasionsTags: [] as string[],
     weatherTags: [] as string[],
     topNotesTags: [] as string[],
@@ -85,7 +102,38 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
       }
     };
 
+    const fetchTags = async () => {
+      try {
+        const response = await fetch('/api/admin/tags');
+        const result = await response.json();
+        if (result.success && result.grouped) {
+          setTagOptions({
+            occasion: result.grouped.occasion?.map((t: { name: string }) => t.name) || DEFAULT_OCCASION_OPTIONS,
+            weather: result.grouped.weather?.map((t: { name: string }) => t.name) || DEFAULT_WEATHER_OPTIONS,
+            top_notes: result.grouped.top_notes?.map((t: { name: string }) => t.name) || DEFAULT_TOP_NOTES_OPTIONS,
+            other: result.grouped.other?.map((t: { name: string }) => t.name) || DEFAULT_OTHER_OPTIONS
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch tags:', error);
+      }
+    };
+
+    const fetchSizes = async () => {
+      try {
+        const response = await fetch('/api/admin/sizes');
+        const result = await response.json();
+        if (result.success) {
+          setSizeOptions(result.data || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch sizes:', error);
+      }
+    };
+
     fetchCategories();
+    fetchTags();
+    fetchSizes();
   }, []);
 
   const handleFileSelect = (file: File) => {
@@ -262,7 +310,6 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
         categoryId: formData.categoryId || null,
         perfumeType: formData.perfumeType,
         isActive: formData.isActive,
-        genderTags: formData.genderTags,
         occasionsTags: formData.occasionsTags,
         weatherTags: formData.weatherTags,
         topNotesTags: formData.topNotesTags,
@@ -308,14 +355,14 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
     return (
       <div className="flex items-center gap-3 p-3 border border-[#d4af37]/30 bg-[#d4af37]/10 rounded-lg">
         {preview ? (
-          <img src={preview} alt="Preview" className="w-12 h-12 object-cover rounded border border-[#d4af37]/20" />
+          <img src={preview} alt="Preview" className="w-12 h-12 object-cover rounded border border-[#e8e0d0]" />
         ) : (
-          <div className="w-12 h-12 bg-[#1a1a1a] rounded flex items-center justify-center border border-[#d4af37]/20">
-            <Upload size={20} className="text-[#b8a070]" />
+          <div className="w-12 h-12 bg-[#faf8f3] rounded flex items-center justify-center border border-[#e8e0d0]">
+            <Upload size={20} className="text-[#7a6a4a]" />
           </div>
         )}
         <div className="flex-1">
-          <div className="text-sm text-[#f5e6d3] truncate max-w-[250px]">{file.name}</div>
+          <div className="text-sm text-[#1c1810] truncate max-w-[250px]">{file.name}</div>
           <div className="text-xs text-[#d4af37]">Will be uploaded on save</div>
         </div>
         <button type="button" onClick={onRemove} className="text-red-400 hover:text-red-300 transition-colors">
@@ -347,7 +394,7 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
             className={`px-3 py-1.5 text-xs rounded-full border transition-all ${
               selectedTags.includes(option)
                 ? 'bg-[#d4af37] text-[#0a0a0a] border-[#d4af37] font-semibold shadow-lg shadow-[#d4af37]/20'
-                : 'bg-[#1a1a1a] text-[#f5e6d3] border-[#d4af37]/20 hover:border-[#d4af37]/40 hover:bg-[#1a1a1a]'
+                : 'bg-[#faf8f3] text-[#1c1810] border-[#e8e0d0] hover:border-[#d4af37]/40 hover:bg-[#faf8f3]'
             }`}
           >
             {option}
@@ -357,14 +404,14 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
     </div>
   );
 
-  const availableSizesToAdd = SIZE_OPTIONS.filter(size => !formData.sizes[size]);
+  const availableSizesToAdd = sizeOptions.filter(size => size.is_active && !formData.sizes[size.name]);
 
   return (
-    <div className="h-full flex flex-col bg-[#0a0a0a]">
+    <div className="h-full flex flex-col bg-white">
       <form onSubmit={handleSubmit} className="flex-1 space-y-6 overflow-y-auto px-1">
         {/* Basic Information */}
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold tracking-wider text-[#d4af37] uppercase border-b border-[#d4af37]/20 pb-2">Basic Information</h3>
+          <h3 className="text-lg font-semibold tracking-wider text-[#d4af37] uppercase border-b border-[#e8e0d0] pb-2">Basic Information</h3>
          
           <div>
             <label className="block text-sm font-medium text-[#d4af37] mb-2 uppercase tracking-wide">
@@ -374,7 +421,7 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
               type="text"
               value={formData.name}
               onChange={(e) => handleInputChange('name', e.target.value)}
-              className="w-full p-3 bg-[#1a1a1a] border border-[#d4af37]/20 rounded-lg text-[#f5e6d3] placeholder-[#b8a070] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent transition-all"
+              className="w-full p-3 bg-[#faf8f3] border border-[#e8e0d0] rounded-lg text-[#1c1810] placeholder-[#b0a080] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent transition-all"
               placeholder="Enter product name"
               required
             />
@@ -388,7 +435,7 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
               value={formData.description}
               onChange={(e) => handleInputChange('description', e.target.value)}
               rows={4}
-              className="w-full p-3 bg-[#1a1a1a] border border-[#d4af37]/20 rounded-lg text-[#f5e6d3] placeholder-[#b8a070] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent transition-all resize-none"
+              className="w-full p-3 bg-[#faf8f3] border border-[#e8e0d0] rounded-lg text-[#1c1810] placeholder-[#b0a080] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent transition-all resize-none"
               placeholder="Enter product description"
               required
             />
@@ -402,11 +449,11 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
               <select
                 value={formData.perfumeType}
                 onChange={(e) => handleInputChange('perfumeType', e.target.value as "Basic" | "Premium")}
-                className="w-full p-3 bg-[#1a1a1a] border border-[#d4af37]/20 rounded-lg text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent transition-all"
+                className="w-full p-3 bg-[#faf8f3] border border-[#e8e0d0] rounded-lg text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent transition-all"
                 required
               >
-                <option value="Basic" className="bg-[#1a1a1a]">Basic</option>
-                <option value="Premium" className="bg-[#1a1a1a]">Premium</option>
+                <option value="Basic" className="bg-[#faf8f3]">Basic</option>
+                <option value="Premium" className="bg-[#faf8f3]">Premium</option>
               </select>
             </div>
 
@@ -417,11 +464,11 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
               <select
                 value={formData.categoryId}
                 onChange={(e) => handleInputChange('categoryId', e.target.value)}
-                className="w-full p-3 bg-[#1a1a1a] border border-[#d4af37]/20 rounded-lg text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent transition-all"
+                className="w-full p-3 bg-[#faf8f3] border border-[#e8e0d0] rounded-lg text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent transition-all"
               >
-                <option value="" className="bg-[#1a1a1a]">Select a category</option>
+                <option value="" className="bg-[#faf8f3]">Select a category</option>
                 {categories.map((category) => (
-                  <option key={category.id} value={category.id} className="bg-[#1a1a1a]">
+                  <option key={category.id} value={category.id} className="bg-[#faf8f3]">
                     {category.name}
                   </option>
                 ))}
@@ -429,7 +476,7 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
             </div>
           </div>
 
-          <div className="flex items-center p-3 bg-[#1a1a1a] border border-[#d4af37]/20 rounded-lg">
+          <div className="flex items-center p-3 bg-[#faf8f3] border border-[#e8e0d0] rounded-lg">
             <input
               type="checkbox"
               id="isActive"
@@ -437,7 +484,7 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
               onChange={(e) => handleInputChange('isActive', e.target.checked)}
               className="h-4 w-4 accent-[#d4af37] rounded"
             />
-            <label htmlFor="isActive" className="ml-3 block text-sm text-[#f5e6d3]">
+            <label htmlFor="isActive" className="ml-3 block text-sm text-[#1c1810]">
               Product is active
             </label>
           </div>
@@ -445,14 +492,14 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
 
         {/* Product Images */}
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold tracking-wider text-[#d4af37] uppercase border-b border-[#d4af37]/20 pb-2">Product Images</h3>
+          <h3 className="text-lg font-semibold tracking-wider text-[#d4af37] uppercase border-b border-[#e8e0d0] pb-2">Product Images</h3>
          
           <div className="space-y-2">
             {formData.images.map((image, index) => (
               <div key={`url-${index}`} className="flex items-center gap-3 p-3 border border-green-500/30 bg-green-900/20 rounded-lg">
-                <img src={image} alt={`Product ${index + 1}`} className="w-12 h-12 object-cover rounded border border-[#d4af37]/20" />
+                <img src={image} alt={`Product ${index + 1}`} className="w-12 h-12 object-cover rounded border border-[#e8e0d0]" />
                 <div className="flex-1">
-                  <div className="text-sm text-[#f5e6d3] truncate max-w-[250px]">{image}</div>
+                  <div className="text-sm text-[#1c1810] truncate max-w-[250px]">{image}</div>
                   <div className="text-xs text-green-400">Image URL ready</div>
                 </div>
                 <button
@@ -487,14 +534,14 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
                     e.target.value = '';
                   }
                 }}
-                className="w-full p-2 bg-[#1a1a1a] border border-[#d4af37]/20 rounded-lg text-[#f5e6d3] file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-[#d4af37] file:text-[#0a0a0a] file:font-semibold hover:file:bg-[#d4af37]/90 transition-all"
+                className="w-full p-2 bg-[#faf8f3] border border-[#e8e0d0] rounded-lg text-[#1c1810] file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-[#d4af37] file:text-[#1c1810] file:font-semibold hover:file:bg-[#d4af37]/90 transition-all"
               />
-              <p className="text-xs text-[#b8a070] mt-2">
+              <p className="text-xs text-[#7a6a4a] mt-2">
                 Supported formats: JPEG, PNG, WebP. Max size: 5MB. Files will be uploaded when you save the product.
               </p>
             </div>
 
-            <div className="border-t border-[#d4af37]/20 pt-3">
+            <div className="border-t border-[#e8e0d0] pt-3">
               <label className="block text-sm font-medium text-[#d4af37] mb-2 uppercase tracking-wide">Or Add Image URL</label>
               <div className="flex gap-2">
                 <input
@@ -502,7 +549,7 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
                   value={newImageUrl}
                   onChange={(e) => setNewImageUrl(e.target.value)}
                   placeholder="Enter image URL"
-                  className="flex-1 p-3 bg-[#1a1a1a] border border-[#d4af37]/20 rounded-lg text-[#f5e6d3] placeholder-[#b8a070] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent transition-all"
+                  className="flex-1 p-3 bg-[#faf8f3] border border-[#e8e0d0] rounded-lg text-[#1c1810] placeholder-[#b0a080] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent transition-all"
                 />
                 <button
                   type="button"
@@ -519,29 +566,29 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
 
         {/* Sizes, Pricing & Stock */}
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold tracking-wider text-[#d4af37] uppercase border-b border-[#d4af37]/20 pb-2">Sizes, Pricing & Stock</h3>
-          <p className="text-sm text-[#b8a070]">Add at least one size with its price and stock</p>
+          <h3 className="text-lg font-semibold tracking-wider text-[#d4af37] uppercase border-b border-[#e8e0d0] pb-2">Sizes, Pricing & Stock</h3>
+          <p className="text-sm text-[#7a6a4a]">Add at least one size with its price and stock</p>
          
           <div className="space-y-3">
             {Object.entries(formData.sizes).map(([size, price]) => {
               const stock = formData.stocks[size] || 0;
              
               return (
-                <div key={size} className="flex items-center gap-3 p-3 bg-[#1a1a1a] border border-[#d4af37]/20 rounded-lg">
+                <div key={size} className="flex items-center gap-3 p-3 bg-[#faf8f3] border border-[#e8e0d0] rounded-lg">
                   <div className="flex-1">
-                    <div className="font-medium text-[#d4af37]">{size}ml</div>
+                    <div className="font-medium text-[#d4af37]">{size}</div>
                   </div>
                  
                   <div className="flex items-center gap-3">
                     <div>
-                      <label className="block text-xs text-[#b8a070] mb-1 uppercase">Price</label>
+                      <label className="block text-xs text-[#7a6a4a] mb-1 uppercase">Price</label>
                       <select
                         value={price}
                         onChange={(e) => handleSizePriceChange(size, parseFloat(e.target.value))}
-                        className="w-24 p-2 text-sm bg-[#0a0a0a] border border-[#d4af37]/20 rounded text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                        className="w-24 p-2 text-sm bg-white border border-[#e8e0d0] rounded text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                       >
                         {PRICE_OPTIONS.map(priceOption => (
-                          <option key={priceOption} value={priceOption} className="bg-[#1a1a1a]">
+                          <option key={priceOption} value={priceOption} className="bg-[#faf8f3]">
                             ₱{priceOption}
                           </option>
                         ))}
@@ -549,13 +596,13 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
                     </div>
                    
                     <div>
-                      <label className="block text-xs text-[#b8a070] mb-1 uppercase">Stock</label>
+                      <label className="block text-xs text-[#7a6a4a] mb-1 uppercase">Stock</label>
                       <input
                         type="number"
                         min="0"
                         value={stock}
                         onChange={(e) => handleSizeStockChange(size, parseInt(e.target.value) || 0)}
-                        className="w-20 p-2 text-sm bg-[#0a0a0a] border border-[#d4af37]/20 rounded text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                        className="w-20 p-2 text-sm bg-white border border-[#e8e0d0] rounded text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                       />
                     </div>
                    
@@ -575,7 +622,7 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
           {availableSizesToAdd.length > 0 && (
             <div className="flex gap-2">
               <select
-                className="flex-1 p-3 bg-[#1a1a1a] border border-[#d4af37]/20 rounded-lg text-[#f5e6d3] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent transition-all"
+                className="flex-1 p-3 bg-[#faf8f3] border border-[#e8e0d0] rounded-lg text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent transition-all"
                 onChange={(e) => {
                   if (e.target.value) {
                     handleAddSize(e.target.value);
@@ -584,10 +631,10 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
                 }}
                 defaultValue=""
               >
-                <option value="" className="bg-[#1a1a1a]">Select size to add...</option>
+                <option value="" className="bg-[#faf8f3]">Select size to add...</option>
                 {availableSizesToAdd.map(size => (
-                  <option key={size} value={size} className="bg-[#1a1a1a]">
-                    {size}ml
+                  <option key={size.id} value={size.name} className="bg-[#faf8f3]">
+                    {size.name}
                   </option>
                 ))}
               </select>
@@ -603,39 +650,32 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
 
         {/* Product Tags */}
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold tracking-wider text-[#d4af37] uppercase border-b border-[#d4af37]/20 pb-2">Product Tags</h3>
-         
-          <TagSelector
-            title="Gender Tags"
-            options={GENDER_OPTIONS}
-            selectedTags={formData.genderTags}
-            onToggle={(tag) => handleTagToggle('genderTags', tag)}
-          />
-         
+          <h3 className="text-lg font-semibold tracking-wider text-[#d4af37] uppercase border-b border-[#e8e0d0] pb-2">Product Tags</h3>
+
           <TagSelector
             title="Occasion Tags"
-            options={OCCASION_OPTIONS}
+            options={tagOptions.occasion}
             selectedTags={formData.occasionsTags}
             onToggle={(tag) => handleTagToggle('occasionsTags', tag)}
           />
-         
+
           <TagSelector
             title="Weather Tags"
-            options={WEATHER_OPTIONS}
+            options={tagOptions.weather}
             selectedTags={formData.weatherTags}
             onToggle={(tag) => handleTagToggle('weatherTags', tag)}
           />
-         
+
           <TagSelector
             title="Top Notes Tags"
-            options={TOP_NOTES_OPTIONS}
+            options={tagOptions.top_notes}
             selectedTags={formData.topNotesTags}
             onToggle={(tag) => handleTagToggle('topNotesTags', tag)}
           />
-         
+
           <TagSelector
             title="Other Options Tags"
-            options={OTHER_OPTIONS}
+            options={tagOptions.other}
             selectedTags={formData.otherOptionsTags}
             onToggle={(tag) => handleTagToggle('otherOptionsTags', tag)}
           />
@@ -644,11 +684,11 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
       </form>
 
       {/* Action Buttons */}
-      <div className="flex-shrink-0 pt-4 border-t border-[#d4af37]/20 flex justify-end gap-3 bg-[#0a0a0a]">
+      <div className="flex-shrink-0 pt-4 border-t border-[#e8e0d0] flex justify-end gap-3 bg-white">
         <button
           type="button"
           onClick={onClose}
-          className="px-6 py-2.5 text-[#f5e6d3] border-2 border-[#d4af37]/30 rounded-lg uppercase text-sm font-semibold hover:bg-[#1a1a1a] hover:border-[#d4af37] transition-all disabled:opacity-50"
+          className="px-6 py-2.5 text-[#1c1810] border-2 border-[#d4af37]/30 rounded-lg uppercase text-sm font-semibold hover:bg-[#faf8f3] hover:border-[#d4af37] transition-all disabled:opacity-50"
           disabled={isLoading}
         >
           Cancel

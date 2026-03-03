@@ -23,7 +23,7 @@ export function SignUpUserSteps() {
           <p className="mt-4">
             You will need to{" "}
             <Link
-              className="text-primary hover:text-[#f5e6d3]"
+              className="text-primary hover:text-[#1c1810]"
               href={
                 "https://supabase.com/dashboard/project/_/auth/url-configuration"
               }
@@ -55,7 +55,7 @@ export function SignUpUserSteps() {
               </span>{" "}
               (Vercel Team URL can be found in{" "}
               <Link
-                className="text-primary hover:text-[#f5e6d3]"
+                className="text-primary hover:text-[#1c1810]"
                 href="https://vercel.com/docs/accounts/create-a-team#find-your-team-id"
                 target="_blank"
               >
@@ -78,7 +78,7 @@ export function SignUpUserSteps() {
           Head over to the{" "}
           <Link
             href="auth/sign-up"
-            className="font-bold hover:underline text-[#f5e6d3]/80"
+            className="font-bold hover:underline text-[#1c1810]/80"
           >
             Sign up
           </Link>{" "}

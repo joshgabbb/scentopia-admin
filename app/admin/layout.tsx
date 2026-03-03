@@ -1,7 +1,7 @@
 // app/admin/layout.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   LayoutDashboard,
   FileText,
@@ -9,34 +9,310 @@ import {
   BarChart3,
   ShoppingBag,
   Bell,
-  Search,
+  User,
+  Users,
+  Settings,
+  LogOut,
+  Shield,
+  ChevronRight,
+  ChevronDown,
+  X,
+  Save,
+  Loader2,
+  Tag,
+  Ruler,
+  Archive,
+  TrendingUp,
+  TrendingDown,
+  Cog,
+  MessageSquare,
+  AlertTriangle,
+  Barcode,
+  Layers,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  ClipboardList,
+  Smartphone,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import logo from "@/public/assets/images/general/stp-transparent-logo-light.png";
 import Image from "next/image";
+import { createClient } from "@/lib/supabase/client";
+import { ThemeProvider, useTheme } from "@/contexts/ThemeContext";
+import { ThemeSwitcher } from "@/components/theme-switcher";
 
-const menuItems = [
+interface MenuItem {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  children?: MenuItem[];
+}
+
+const menuItems: MenuItem[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "products", label: "Products", icon: Package },
-  { id: "reports", label: "Reports", icon: FileText },
+  {
+    id: "products",
+    label: "Products",
+    icon: Package,
+    children: [
+      { id: "products", label: "All Products", icon: Package },
+      { id: "categories", label: "Categories", icon: Tag },
+      { id: "tags", label: "Tags", icon: Tag },
+      { id: "sizes", label: "Sizes", icon: Ruler },
+      { id: "fast-moving", label: "Fast-Moving", icon: TrendingUp },
+      { id: "slow-moving", label: "Slow-Moving", icon: TrendingDown },
+      { id: "archived", label: "Archived", icon: Archive },
+      { id: "barcodes", label: "Barcodes", icon: Barcode },
+    ],
+  },
+  { id: "reports", label: "Reports", icon: BarChart3 },
+  { id: "customer-view", label: "Customer View", icon: Smartphone },
   { id: "orders", label: "Orders", icon: ShoppingBag },
-  { id: "analytics", label: "Analytics", icon: BarChart3 },
+  {
+    id: "inventory",
+    label: "Inventory",
+    icon: Layers,
+    children: [
+      { id: "stock-in", label: "Stock In", icon: ArrowDownToLine },
+      { id: "stock-out", label: "Stock Out", icon: ArrowUpFromLine },
+      { id: "stock-history", label: "Stock History", icon: ClipboardList },
+    ],
+  },
+  {
+    id: "management",
+    label: "Management",
+    icon: Cog,
+    children: [
+      { id: "audit-trails", label: "Audit Trails", icon: FileText },
+      { id: "feedback", label: "Feedback", icon: MessageSquare },
+      { id: "notifications", label: "Notifications", icon: Bell },
+      { id: "inventory-alerts", label: "Inventory Alerts", icon: AlertTriangle },
+    ],
+  },
+  {
+    id: "clients",
+    label: "Clients",
+    icon: Users,
+    children: [
+      { id: "users", label: "All Clients", icon: Users },
+      { id: "users-archived", label: "Archived", icon: Archive },
+    ],
+  },
 ];
 
-export default function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { themeClasses } = useTheme();
 
   const [optimisticActive, setOptimisticActive] = useState<string | null>(null);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(["products"]));
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [user, setUser] = useState<{ id: string; email: string; firstName: string; lastName: string; phone: string } | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [showAccountSettings, setShowAccountSettings] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Account settings form
+  const [accountForm, setAccountForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  const notificationsRef = useRef<HTMLDivElement>(null);
+
+  // Fetch user data
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const supabase = createClient();
+        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+
+        if (authError || !authUser) {
+          console.log('No authenticated user found');
+          return;
+        }
+
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('first_name, last_name, email, phone')
+          .eq('id', authUser.id)
+          .single();
+
+        if (profileError) {
+          console.log('Profile fetch error:', profileError);
+        }
+
+        const userData = {
+          id: authUser.id,
+          email: authUser.email || '',
+          firstName: profile?.first_name || '',
+          lastName: profile?.last_name || '',
+          phone: profile?.phone || '',
+        };
+
+        setUser(userData);
+        setAccountForm({
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          email: userData.email,
+          phone: userData.phone,
+          newPassword: '',
+          confirmPassword: '',
+        });
+      } catch (error) {
+        console.error('Error fetching user:', error);
+      }
+    };
+    fetchUser();
+  }, []);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
+        setIsNotificationsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Escape key to close modals
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsUserMenuOpen(false);
+        setIsNotificationsOpen(false);
+        setShowAccountSettings(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      router.push("/admin/login");
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setIsLoggingOut(false);
+      setIsUserMenuOpen(false);
+    }
+  };
+
+  const handleSaveAccountSettings = async () => {
+    // Validate user exists
+    if (!user || !user.id) {
+      setSaveMessage({ type: 'error', text: 'User session not found. Please log in again.' });
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveMessage(null);
+
+    try {
+      const supabase = createClient();
+
+      // Validate password if provided
+      if (accountForm.newPassword) {
+        if (accountForm.newPassword !== accountForm.confirmPassword) {
+          throw new Error('New passwords do not match');
+        }
+        if (accountForm.newPassword.length < 6) {
+          throw new Error('Password must be at least 6 characters');
+        }
+      }
+
+      // Update profile data
+      const { data: updateData, error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          first_name: accountForm.firstName,
+          last_name: accountForm.lastName,
+          phone: accountForm.phone || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', user.id)
+        .select();
+
+      if (profileError) {
+        console.error('Profile update error:', profileError);
+        throw new Error(profileError.message || 'Failed to update profile');
+      }
+
+      console.log('Profile updated:', updateData);
+
+      // Update password if provided
+      if (accountForm.newPassword) {
+        const { error: passwordError } = await supabase.auth.updateUser({
+          password: accountForm.newPassword,
+        });
+
+        if (passwordError) {
+          console.error('Password update error:', passwordError);
+          throw new Error(passwordError.message || 'Failed to update password');
+        }
+      }
+
+      // Update local user state
+      setUser(prev => prev ? {
+        ...prev,
+        firstName: accountForm.firstName,
+        lastName: accountForm.lastName,
+        phone: accountForm.phone,
+      } : null);
+
+      // Clear password fields
+      setAccountForm(prev => ({
+        ...prev,
+        newPassword: '',
+        confirmPassword: '',
+      }));
+
+      setSaveMessage({ type: 'success', text: 'Account settings saved successfully!' });
+
+      // Auto close after success
+      setTimeout(() => {
+        setShowAccountSettings(false);
+        setSaveMessage(null);
+      }, 2000);
+
+    } catch (error) {
+      console.error('Save error:', error);
+      setSaveMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to save settings'
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const currentPageId = useMemo(() => {
     if (pathname === "/admin" || pathname === "/admin/") {
       return "dashboard";
+    }
+    // Handle nested routes like /admin/users/archived
+    if (pathname === "/admin/users/archived") {
+      return "users-archived";
     }
     const segments = pathname.split('/');
     return segments[segments.length - 1] || "dashboard";
@@ -46,16 +322,36 @@ export default function AdminLayout({
     const timer = setTimeout(() => {
       setOptimisticActive(null);
       setIsNavigating(false);
-    }, 50); 
+    }, 50);
 
     return () => clearTimeout(timer);
   }, [pathname]);
+
+  // Auto-expand parent menu when on a child page
+  useEffect(() => {
+    const productChildIds = ["products", "categories", "tags", "sizes", "archived", "fast-moving", "slow-moving", "barcodes"];
+    const clientChildIds = ["users", "users-archived"];
+    const managementChildIds = ["audit-trails", "feedback", "notifications", "inventory-alerts"];
+    const inventoryChildIds = ["stock-in", "stock-out", "stock-history"];
+    if (productChildIds.includes(currentPageId)) {
+      setExpandedMenus(prev => new Set([...prev, "products"]));
+    }
+    if (clientChildIds.includes(currentPageId)) {
+      setExpandedMenus(prev => new Set([...prev, "clients"]));
+    }
+    if (managementChildIds.includes(currentPageId)) {
+      setExpandedMenus(prev => new Set([...prev, "management"]));
+    }
+    if (inventoryChildIds.includes(currentPageId)) {
+      setExpandedMenus(prev => new Set([...prev, "inventory"]));
+    }
+  }, [currentPageId]);
 
   const handleNavigation = useCallback((itemId: string, href: string) => {
     if (currentPageId === itemId) {
       return;
     }
-    
+
     setOptimisticActive(itemId);
     setIsNavigating(true);
     router.push(href);
@@ -64,39 +360,41 @@ export default function AdminLayout({
   const getIsActive = useCallback((itemId: string) => {
     if (optimisticActive === itemId) return true;
     if (optimisticActive && optimisticActive !== itemId) return false;
-    
+
     return currentPageId === itemId;
   }, [optimisticActive, currentPageId]);
 
   const currentPageTitle = useMemo(() => {
     const activeId = optimisticActive || currentPageId;
+
+    // Check top-level items first
     const activeItem = menuItems.find(item => item.id === activeId);
-    return activeItem?.label || "Admin";
+    if (activeItem) return activeItem.label;
+
+    // Check children items
+    for (const item of menuItems) {
+      if (item.children) {
+        const childItem = item.children.find(child => child.id === activeId);
+        if (childItem) return childItem.label;
+      }
+    }
+
+    return "Admin";
   }, [optimisticActive, currentPageId]);
 
   const shouldShowNavDetails = useMemo(() => {
     return pathname.includes("/admin") && !pathname.includes("/login");
   }, [pathname]);
 
-  useEffect(() => {
-    console.log('Navigation Debug:', {
-      pathname,
-      currentPageId,
-      optimisticActive,
-      isNavigating,
-      title: currentPageTitle
-    });
-  }, [pathname, currentPageId, optimisticActive, isNavigating, currentPageTitle]);
-
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex">
+    <div className={`min-h-screen ${themeClasses.bg} flex transition-colors duration-200`}>
       {shouldShowNavDetails && (
-        <div className="w-16 lg:w-64 bg-[#1a1a1a] border-r border-[#d4af37]/20 flex-shrink-0">
-          <div className="hidden h-[74px] lg:flex items-center justify-start p-6 border-b border-[#d4af37]/20">
-            <h1 className="text-lg font-semibold text-[#d4af37] tracking-[3]">SCENTOPIA</h1>
+        <div className={`w-16 lg:w-64 ${themeClasses.bgSecondary} border-r ${themeClasses.border} flex-shrink-0 transition-colors duration-200`}>
+          <div className={`hidden h-[74px] lg:flex items-center justify-start p-6 border-b ${themeClasses.border}`}>
+            <h1 className={`text-lg font-semibold ${themeClasses.accent} tracking-[3px]`}>SCENTOPIA</h1>
           </div>
-          <div className="lg:hidden flex items-center justify-center p-4 border-b border-[#d4af37]/20">
-            <div className="w-32 h-9 flex items-center justify-center text-[#d4af37] font-bold text-sm">
+          <div className={`lg:hidden flex items-center justify-center p-4 border-b ${themeClasses.border}`}>
+            <div className={`w-32 h-9 flex items-center justify-center ${themeClasses.accent} font-bold text-sm`}>
               <Image
                 src={logo}
                 alt="Scentopia Logo"
@@ -106,29 +404,112 @@ export default function AdminLayout({
           </div>
 
           <nav className="p-2 lg:p-4">
-            <ul className="space-y-1 lg:space-y-2">
+            <ul className="space-y-1 lg:space-y-1">
               {menuItems.map((item) => {
                 const IconComponent = item.icon;
-                const href = item.id === "dashboard" ? "/admin" : `/admin/${item.id}`;
-                const isActive = getIsActive(item.id);
-                
+                const hasChildren = item.children && item.children.length > 0;
+                const isExpanded = expandedMenus.has(item.id);
+                const isParentActive = hasChildren && item.children?.some(child => getIsActive(child.id));
+
+                // For items without children
+                if (!hasChildren) {
+                  const href = item.id === "dashboard" ? "/admin" : `/admin/${item.id}`;
+                  const isActive = getIsActive(item.id);
+
+                  return (
+                    <li key={item.id}>
+                      <button
+                        onClick={() => handleNavigation(item.id, href)}
+                        disabled={isNavigating}
+                        className={`w-full flex items-center justify-center lg:justify-start space-x-0 lg:space-x-3 px-2 lg:px-4 py-3 text-left font-medium transition-all duration-150 ease-out transform group relative disabled:opacity-50 ${
+                          isActive
+                            ? `${themeClasses.accentBg} ${themeClasses.accentText}`
+                            : `${themeClasses.text} ${themeClasses.hoverBg}`
+                        }`}
+                      >
+                        <IconComponent className="w-5 h-5 flex-shrink-0" />
+                        <span className="hidden lg:block uppercase">{item.label}</span>
+                        {isNavigating && optimisticActive === item.id && (
+                          <div className={`ml-2 w-2 h-2 ${themeClasses.accentText} rounded-full animate-pulse`} />
+                        )}
+                      </button>
+                    </li>
+                  );
+                }
+
+                // For items with children (expandable)
                 return (
                   <li key={item.id}>
                     <button
-                      onClick={() => handleNavigation(item.id, href)}
-                      disabled={isNavigating}
-                      className={`w-full flex items-center justify-center lg:justify-start space-x-0 lg:space-x-3 px-2 lg:px-4 py-3 text-left font-medium transition-all duration-75 ease-out transform group relative disabled:opacity-50 ${
-                        isActive
-                          ? "bg-[#d4af37] text-[#0a0a0a]"
-                          : "text-[#f5e6d3] hover:bg-[#d4af37]/10 active:bg-[#d4af37]/20"
+                      onClick={() => {
+                        const newExpanded = new Set(expandedMenus);
+                        if (isExpanded) {
+                          newExpanded.delete(item.id);
+                        } else {
+                          newExpanded.add(item.id);
+                        }
+                        setExpandedMenus(newExpanded);
+                      }}
+                      className={`w-full flex items-center justify-center lg:justify-between px-2 lg:px-4 py-3 text-left font-medium transition-all duration-150 ease-out ${
+                        isParentActive
+                          ? `${themeClasses.accent}`
+                          : `${themeClasses.text} ${themeClasses.hoverBg}`
                       }`}
                     >
-                      <IconComponent className="w-5 h-5 flex-shrink-0" />
-                      <span className="hidden lg:block uppercase">{item.label}</span>
-                      {isNavigating && optimisticActive === item.id && (
-                        <div className="ml-2 w-2 h-2 bg-[#0a0a0a] rounded-full animate-pulse" />
-                      )}
+                      <div className="flex items-center space-x-0 lg:space-x-3">
+                        <IconComponent className="w-5 h-5 flex-shrink-0" />
+                        <span className="hidden lg:block uppercase">{item.label}</span>
+                      </div>
+                      <ChevronDown
+                        className={`hidden lg:block w-4 h-4 transition-transform duration-200 ${
+                          isExpanded ? "rotate-180" : ""
+                        }`}
+                      />
                     </button>
+
+                    {/* Children */}
+                    <ul
+                      className={`overflow-hidden transition-all duration-200 ${
+                        isExpanded ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+                      }`}
+                    >
+                      {item.children?.map((child) => {
+                        const ChildIcon = child.icon;
+                        // Handle special routes
+                        let childHref = `/admin/${child.id}`;
+                        if (child.id === "products") childHref = "/admin/products";
+                        if (child.id === "users") childHref = "/admin/users";
+                        if (child.id === "users-archived") childHref = "/admin/users/archived";
+                        // Products children routes
+                        if (item.id === "products" && child.id === "fast-moving") childHref = "/admin/products/fast-moving";
+                        if (item.id === "products" && child.id === "slow-moving") childHref = "/admin/products/slow-moving";
+                        if (item.id === "products" && child.id === "barcodes") childHref = "/admin/products/barcodes";
+                        // Management children routes
+                        if (item.id === "management") childHref = `/admin/management/${child.id}`;
+                        if (item.id === "inventory") childHref = `/admin/inventory/${child.id}`;
+                        const isChildActive = getIsActive(child.id);
+
+                        return (
+                          <li key={child.id}>
+                            <button
+                              onClick={() => handleNavigation(child.id, childHref)}
+                              disabled={isNavigating}
+                              className={`w-full flex items-center justify-center lg:justify-start space-x-0 lg:space-x-3 px-2 lg:pl-8 lg:pr-4 py-2.5 text-left text-sm font-medium transition-all duration-150 ease-out disabled:opacity-50 ${
+                                isChildActive
+                                  ? `${themeClasses.accentBg} ${themeClasses.accentText}`
+                                  : `${themeClasses.text} ${themeClasses.hoverBg}`
+                              }`}
+                            >
+                              <ChildIcon className="w-4 h-4 flex-shrink-0" />
+                              <span className="hidden lg:block uppercase text-xs">{child.label}</span>
+                              {isNavigating && optimisticActive === child.id && (
+                                <div className={`ml-2 w-2 h-2 ${themeClasses.accentText} rounded-full animate-pulse`} />
+                              )}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
                   </li>
                 );
               })}
@@ -139,51 +520,337 @@ export default function AdminLayout({
 
       <div className="flex-1 flex flex-col min-w-0">
         {shouldShowNavDetails && (
-          <header className="bg-[#1a1a1a] border-b border-[#d4af37]/20 px-4 lg:px-6 py-4">
+          <header className={`${themeClasses.bgSecondary} border-b ${themeClasses.border} px-4 lg:px-6 py-4 transition-colors duration-200`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
-                <h2 className="text-xl font-semibold text-[#d4af37] uppercase tracking-[2]">
+                <h2 className={`text-xl font-semibold ${themeClasses.accent} uppercase tracking-[2px]`}>
                   {currentPageTitle}
                 </h2>
                 {isNavigating && (
                   <div className="flex space-x-1">
-                    <div className="w-2 h-2 bg-[#d4af37] rounded-full animate-bounce"></div>
-                    <div className="w-2 h-2 bg-[#d4af37] rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                    <div className="w-2 h-2 bg-[#d4af37] rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                    <div className={`w-2 h-2 ${themeClasses.accentBg} rounded-full animate-bounce`}></div>
+                    <div className={`w-2 h-2 ${themeClasses.accentBg} rounded-full animate-bounce`} style={{animationDelay: '0.1s'}}></div>
+                    <div className={`w-2 h-2 ${themeClasses.accentBg} rounded-full animate-bounce`} style={{animationDelay: '0.2s'}}></div>
                   </div>
                 )}
               </div>
 
               <div className="flex items-center space-x-2 lg:space-x-4">
-                <div className="relative hidden sm:block">
-                  <Search className="w-5 h-5 text-[#b8a070] absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="text"
-                    placeholder="Search..."
-                    className="pl-10 pr-4 py-2 border border-[#d4af37]/20 bg-[#0a0a0a] text-[#f5e6d3] w-48 lg:w-80 focus:outline-none focus:border-[#d4af37] transition-colors duration-150 placeholder-[#b8a070]"
-                  />
+                {/* Theme Toggle */}
+                <ThemeSwitcher />
+
+                {/* Notifications */}
+                <div className="relative" ref={notificationsRef}>
+                  <button
+                    onClick={() => {
+                      setIsNotificationsOpen(!isNotificationsOpen);
+                      setIsUserMenuOpen(false);
+                    }}
+                    className={`relative p-2 ${themeClasses.hoverBg} transition-colors duration-150 rounded-md active:scale-95 ${themeClasses.text}`}
+                  >
+                    <Bell className="w-5 h-5" />
+                    <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
+                  </button>
+
+                  {/* Notifications Dropdown */}
+                  {isNotificationsOpen && (
+                    <div className={`absolute right-0 mt-2 w-80 ${themeClasses.bgSecondary} border ${themeClasses.border} shadow-xl z-50 transition-colors duration-200`}>
+                      <div className={`px-4 py-3 border-b ${themeClasses.border}`}>
+                        <h3 className={`text-sm font-semibold ${themeClasses.accent}`}>Notifications</h3>
+                      </div>
+                      <div className="max-h-64 overflow-y-auto">
+                        <div className={`px-4 py-3 ${themeClasses.hoverBg} border-b ${themeClasses.border} cursor-pointer`}>
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+                              <ShoppingBag className="w-4 h-4 text-green-500" />
+                            </div>
+                            <div>
+                              <p className={`text-sm ${themeClasses.text}`}>New order received</p>
+                              <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Order #A1B2C3 - 2 items</p>
+                              <p className={`text-xs ${themeClasses.textMuted} opacity-60 mt-1`}>5 minutes ago</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className={`px-4 py-3 ${themeClasses.hoverBg} border-b ${themeClasses.border} cursor-pointer`}>
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 bg-orange-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+                              <Package className="w-4 h-4 text-orange-500" />
+                            </div>
+                            <div>
+                              <p className={`text-sm ${themeClasses.text}`}>Low stock alert</p>
+                              <p className={`text-xs ${themeClasses.textMuted} mt-1`}>3 products need restocking</p>
+                              <p className={`text-xs ${themeClasses.textMuted} opacity-60 mt-1`}>1 hour ago</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className={`px-4 py-3 ${themeClasses.hoverBg} cursor-pointer`}>
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+                              <BarChart3 className="w-4 h-4 text-blue-500" />
+                            </div>
+                            <div>
+                              <p className={`text-sm ${themeClasses.text}`}>Weekly report ready</p>
+                              <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Sales increased by 15%</p>
+                              <p className={`text-xs ${themeClasses.textMuted} opacity-60 mt-1`}>Yesterday</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className={`px-4 py-3 border-t ${themeClasses.border}`}>
+                        <button
+                          onClick={() => {
+                            router.push('/admin/management/notifications');
+                            setIsNotificationsOpen(false);
+                          }}
+                          className={`w-full text-sm ${themeClasses.accent} hover:opacity-80 text-center font-medium`}
+                        >
+                          View all notifications
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <button className="relative p-2 hover:bg-[#d4af37]/10 transition-colors duration-150 rounded-md active:scale-95 text-[#f5e6d3]">
-                  <Bell className="w-5 h-5" />
-                  <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
-                </button>
-                <div className="w-8 h-8 bg-[#d4af37] rounded-full flex items-center justify-center hover:bg-[#d4af37]/80 transition-colors duration-150 cursor-pointer active:scale-95">
-                  <span className="text-sm font-medium text-[#0a0a0a]">A</span>
+
+                {/* User Menu */}
+                <div className="relative" ref={userMenuRef}>
+                  <button
+                    onClick={() => {
+                      setIsUserMenuOpen(!isUserMenuOpen);
+                      setIsNotificationsOpen(false);
+                    }}
+                    className={`w-8 h-8 ${themeClasses.accentBg} rounded-full flex items-center justify-center hover:opacity-80 transition-all duration-150 cursor-pointer active:scale-95`}
+                  >
+                    <span className={`text-sm font-medium ${themeClasses.accentText}`}>
+                      {user?.firstName?.charAt(0).toUpperCase() || 'A'}
+                    </span>
+                  </button>
+
+                  {/* User Dropdown Menu */}
+                  {isUserMenuOpen && (
+                    <div className={`absolute right-0 mt-2 w-72 ${themeClasses.bgSecondary} border ${themeClasses.border} shadow-xl z-50 transition-colors duration-200`}>
+                      {/* User Info */}
+                      <div className={`px-4 py-4 border-b ${themeClasses.border}`}>
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 ${themeClasses.accentBg} rounded-full flex items-center justify-center`}>
+                            <span className={`text-lg font-semibold ${themeClasses.accentText}`}>
+                              {user?.firstName?.charAt(0).toUpperCase() || 'A'}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-medium ${themeClasses.text} truncate`}>
+                              {user?.firstName && user?.lastName
+                                ? `${user.firstName} ${user.lastName}`
+                                : 'Admin User'}
+                            </p>
+                            <p className={`text-xs ${themeClasses.textMuted} truncate`}>
+                              {user?.email || 'admin@scentopia.com'}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1 px-2 py-1 bg-[#d4af37]/10 rounded">
+                            <Shield className={`w-3 h-3 ${themeClasses.accent}`} />
+                            <span className={`text-xs font-medium ${themeClasses.accent}`}>Admin</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Menu Items */}
+                      <div className="py-2">
+                        <button
+                          onClick={() => {
+                            setShowAccountSettings(true);
+                            setIsUserMenuOpen(false);
+                          }}
+                          className={`w-full px-4 py-2.5 flex items-center gap-3 text-left ${themeClasses.hoverBg} transition-colors`}
+                        >
+                          <Settings className={`w-4 h-4 ${themeClasses.textMuted}`} />
+                          <span className={`text-sm ${themeClasses.text}`}>Account Settings</span>
+                          <ChevronRight className={`w-4 h-4 ${themeClasses.textMuted} ml-auto`} />
+                        </button>
+
+                        <div className={`border-t ${themeClasses.border} my-2`}></div>
+
+                        <button
+                          onClick={handleLogout}
+                          disabled={isLoggingOut}
+                          className="w-full px-4 py-2.5 flex items-center gap-3 text-left hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                        >
+                          <LogOut className="w-4 h-4 text-red-500" />
+                          <span className="text-sm text-red-500 font-medium">
+                            {isLoggingOut ? 'Logging out...' : 'Log Out'}
+                          </span>
+                        </button>
+                      </div>
+
+                      {/* Footer */}
+                      <div className={`px-4 py-2 border-t ${themeClasses.border} ${themeClasses.bgTertiary}`}>
+                        <p className={`text-xs ${themeClasses.textMuted} text-center`}>
+                          Scentopia Admin v1.0
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           </header>
         )}
 
-        <main className="flex-1 p-2 sm:p-4 lg:p-6 overflow-y-auto bg-[#0a0a0a]">
+        <main className={`flex-1 p-2 sm:p-4 lg:p-6 overflow-y-auto ${themeClasses.bg} transition-colors duration-200`}>
           {isNavigating && (
-            <div className="absolute inset-0 bg-[#0a0a0a] bg-opacity-50 z-10 flex items-center justify-center">
-              <div className="text-lg font-medium text-[#d4af37]">Loading...</div>
+            <div className={`absolute inset-0 ${themeClasses.bg} bg-opacity-50 z-10 flex items-center justify-center`}>
+              <div className={`text-lg font-medium ${themeClasses.accent}`}>Loading...</div>
             </div>
           )}
           {children}
         </main>
       </div>
+
+      {/* Account Settings Modal */}
+      {showAccountSettings && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className={`${themeClasses.bgSecondary} border ${themeClasses.border} w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl transition-colors duration-200`}>
+            <div className={`px-6 py-4 border-b ${themeClasses.border} flex items-center justify-between sticky top-0 ${themeClasses.bgSecondary} z-10`}>
+              <h2 className={`text-lg font-semibold ${themeClasses.accent}`}>Account Settings</h2>
+              <button
+                onClick={() => {
+                  setShowAccountSettings(false);
+                  setSaveMessage(null);
+                }}
+                className={`p-1 ${themeClasses.textMuted} ${themeClasses.hoverBg} rounded transition-colors`}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Save Message */}
+              {saveMessage && (
+                <div className={`p-4 rounded ${saveMessage.type === 'success' ? 'bg-green-500/20 border border-green-500/30 text-green-600' : 'bg-red-500/20 border border-red-500/30 text-red-600'}`}>
+                  <p className="font-medium">{saveMessage.text}</p>
+                </div>
+              )}
+
+              {/* Profile Information */}
+              <div>
+                <h3 className={`text-sm font-semibold ${themeClasses.accent} mb-4 uppercase tracking-wide`}>Profile Information</h3>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>First Name</label>
+                      <input
+                        type="text"
+                        value={accountForm.firstName}
+                        onChange={(e) => setAccountForm({ ...accountForm, firstName: e.target.value })}
+                        className={`w-full px-3 py-2.5 ${themeClasses.inputBg} border ${themeClasses.border} ${themeClasses.text} focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent rounded transition-colors`}
+                        placeholder="John"
+                      />
+                    </div>
+                    <div>
+                      <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>Last Name</label>
+                      <input
+                        type="text"
+                        value={accountForm.lastName}
+                        onChange={(e) => setAccountForm({ ...accountForm, lastName: e.target.value })}
+                        className={`w-full px-3 py-2.5 ${themeClasses.inputBg} border ${themeClasses.border} ${themeClasses.text} focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent rounded transition-colors`}
+                        placeholder="Doe"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>Email Address</label>
+                    <input
+                      type="email"
+                      value={accountForm.email}
+                      disabled
+                      className={`w-full px-3 py-2.5 ${themeClasses.bgTertiary} border ${themeClasses.border} ${themeClasses.textMuted} cursor-not-allowed rounded`}
+                    />
+                    <p className={`text-xs ${themeClasses.textMuted} mt-1.5`}>Email cannot be changed</p>
+                  </div>
+
+                  <div>
+                    <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>Phone Number</label>
+                    <input
+                      type="tel"
+                      value={accountForm.phone}
+                      onChange={(e) => setAccountForm({ ...accountForm, phone: e.target.value })}
+                      className={`w-full px-3 py-2.5 ${themeClasses.inputBg} border ${themeClasses.border} ${themeClasses.text} focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent rounded transition-colors`}
+                      placeholder="+63 912 345 6789"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Change Password */}
+              <div className={`pt-6 border-t ${themeClasses.border}`}>
+                <h3 className={`text-sm font-semibold ${themeClasses.accent} mb-4 uppercase tracking-wide`}>Change Password</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>New Password</label>
+                    <input
+                      type="password"
+                      value={accountForm.newPassword}
+                      onChange={(e) => setAccountForm({ ...accountForm, newPassword: e.target.value })}
+                      className={`w-full px-3 py-2.5 ${themeClasses.inputBg} border ${themeClasses.border} ${themeClasses.text} focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent rounded transition-colors`}
+                      placeholder="Enter new password"
+                    />
+                  </div>
+
+                  <div>
+                    <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>Confirm New Password</label>
+                    <input
+                      type="password"
+                      value={accountForm.confirmPassword}
+                      onChange={(e) => setAccountForm({ ...accountForm, confirmPassword: e.target.value })}
+                      className={`w-full px-3 py-2.5 ${themeClasses.inputBg} border ${themeClasses.border} ${themeClasses.text} focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent rounded transition-colors`}
+                      placeholder="Confirm new password"
+                    />
+                  </div>
+                  <p className={`text-xs ${themeClasses.textMuted}`}>Leave blank to keep current password. Minimum 6 characters.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className={`px-6 py-4 border-t ${themeClasses.border} flex items-center justify-end gap-3 sticky bottom-0 ${themeClasses.bgSecondary}`}>
+              <button
+                onClick={() => {
+                  setShowAccountSettings(false);
+                  setSaveMessage(null);
+                }}
+                className={`px-5 py-2.5 border ${themeClasses.border} ${themeClasses.text} ${themeClasses.hoverBg} transition-colors rounded font-medium`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveAccountSettings}
+                disabled={isSaving}
+                className={`px-5 py-2.5 ${themeClasses.accentBg} ${themeClasses.accentText} font-medium hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2 rounded`}
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    Save Changes
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <ThemeProvider>
+      <AdminLayoutContent>{children}</AdminLayoutContent>
+    </ThemeProvider>
   );
 }

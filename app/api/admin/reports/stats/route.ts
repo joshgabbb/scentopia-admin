@@ -45,7 +45,8 @@ export async function GET() {
     });
 
 
-    const fastMovingCount = Object.values(productSales).filter(qty => qty > 5).length;
+    // Fast Moving = sold ≥ 10 units in last 30 days (matches fast-moving/route.ts threshold)
+    const fastMovingCount = Object.values(productSales).filter(qty => qty >= 10).length;
 
 
     // 3. Get all active products
@@ -83,9 +84,11 @@ export async function GET() {
     });
 
 
+    // Slow Moving = sold < 10 units in 60 days (< fastMin for 60d period = ceil(60/3) = 20;
+    // we use a simpler cutoff here for the dashboard stat card)
     const slowMovingCount = allProducts?.filter(product => {
       const sales = recentProductSales[product.id] || 0;
-      return sales < 5; // Less than 5 units sold in 60 days
+      return sales < 20; // Less than 20 units sold in 60 days → below fast threshold
     }).length || 0;
 
 
@@ -96,13 +99,14 @@ export async function GET() {
       .eq('is_active', true);
 
 
+    // Low Stock = total stock ≤ 20 (matches inventory-alerts/route.ts LOW threshold)
     let lowStockCount = 0;
     products?.forEach(product => {
       const totalStock = product.stocks
         ? Object.values(product.stocks as Record<string, number>)
             .reduce((sum: number, stock: number) => sum + stock, 0)
         : 0;
-      if (totalStock < 10) {
+      if (totalStock <= 20) {
         lowStockCount++;
       }
     });

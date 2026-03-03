@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { logProductCreate, logProductUpdate, logProductDelete } from "@/lib/audit-logger";
 
 export interface CategoryData {
   id: string;
@@ -18,6 +19,7 @@ export async function GET(request: NextRequest) {
     const categoryFilter = searchParams.get('category') || 'all';
     const perfumeTypeFilter = searchParams.get('perfume_type') || 'all';
     const statusFilter = searchParams.get('status') || 'all';
+    const showArchived = searchParams.get('archived') === 'true';
     const limit = 25;
     const offset = (page - 1) * limit;
 
@@ -33,7 +35,8 @@ export async function GET(request: NextRequest) {
         updated_at,
         perfume_type,
         is_active,
-        gender_tags,
+        is_archived,
+        archived_at,
         occasions_tags,
         weather_tags,
         top_notes_tags,
@@ -45,6 +48,9 @@ export async function GET(request: NextRequest) {
           name
         )
       `, { count: 'exact' });
+
+    // Filter by archived status
+    query = query.eq('is_archived', showArchived);
 
     // Fix: Format the search query as a single line
     if (search) {
@@ -102,6 +108,8 @@ export async function GET(request: NextRequest) {
           updatedAt: product.updated_at,
           perfumeType: product.perfume_type,
           isActive: product.is_active,
+          isArchived: product.is_archived || false,
+          archivedAt: product.archived_at,
           category: product.category ? (() => {
             const categoryData = Array.isArray(product.category) 
               ? product.category[0] as CategoryData
@@ -112,7 +120,6 @@ export async function GET(request: NextRequest) {
               name: categoryData.name
             } : null;
           })() : null,
-          genderTags: product.gender_tags || [],
           occasionsTags: product.occasions_tags || [],
           weatherTags: product.weather_tags || [],
           topNotesTags: product.top_notes_tags || [],
@@ -166,7 +173,6 @@ export async function POST(request: NextRequest) {
       categoryId,
       perfumeType,
       isActive,
-      genderTags,
       occasionsTags,
       weatherTags,
       topNotesTags,
@@ -185,7 +191,6 @@ export async function POST(request: NextRequest) {
         category_id: categoryId,
         perfume_type: perfumeType,
         is_active: isActive,
-        gender_tags: genderTags,
         occasions_tags: occasionsTags,
         weather_tags: weatherTags,
         top_notes_tags: topNotesTags,
@@ -198,6 +203,30 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       throw error;
+    }
+
+    // Audit log — fire and forget
+    logProductCreate(data.id, name, { name, price, categoryId, perfumeType, isActive }, request);
+
+    // Insert initial stock movements for each size
+    if (data && stocks && typeof stocks === 'object') {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const stockEntries = Object.entries(stocks as Record<string, number>).filter(([, qty]) => qty > 0);
+      if (stockEntries.length > 0) {
+        await supabase.from('stock_movements').insert(
+          stockEntries.map(([size, qty]) => ({
+            product_id: data.id,
+            size,
+            type: 'IN',
+            quantity: qty,
+            previous_stock: 0,
+            new_stock: qty,
+            reason: 'Initial Stock',
+            remarks: null,
+            created_by: authUser?.id || null,
+          }))
+        );
+      }
     }
 
     return NextResponse.json({
@@ -220,11 +249,11 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   const supabase = await createClient();
-  
+
   try {
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get('id');
-    
+
     if (!productId) {
       return NextResponse.json(
         { success: false, error: 'Product ID is required' },
@@ -241,6 +270,13 @@ export async function PATCH(request: NextRequest) {
 
     updateData.updated_at = new Date().toISOString();
 
+    // Capture old state for audit diff
+    const { data: oldProduct } = await supabase
+      .from('products')
+      .select('name, price, is_active, category_id, perfume_type, stocks')
+      .eq('id', productId)
+      .single();
+
     const { data, error } = await supabase
       .from('products')
       .update(updateData)
@@ -251,6 +287,15 @@ export async function PATCH(request: NextRequest) {
     if (error) {
       throw error;
     }
+
+    // Audit log — fire and forget
+    logProductUpdate(
+      productId,
+      oldProduct?.name ?? productId,
+      oldProduct ?? {},
+      updateData,
+      request
+    );
 
     return NextResponse.json({
       success: true,
@@ -272,11 +317,12 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   const supabase = await createClient();
-  
+
   try {
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get('id');
-    
+    const action = searchParams.get('action') || 'archive'; // 'archive' or 'restore'
+
     if (!productId) {
       return NextResponse.json(
         { success: false, error: 'Product ID is required' },
@@ -284,7 +330,59 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Delete related records in correct order to avoid foreign key constraints
+    // Fetch name for audit label
+    const { data: existing } = await supabase
+      .from('products')
+      .select('name')
+      .eq('id', productId)
+      .single();
+
+    if (action === 'restore') {
+      // Restore archived product
+      const { data, error } = await supabase
+        .from('products')
+        .update({
+          is_archived: false,
+          archived_at: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', productId)
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      logProductUpdate(productId, existing?.name ?? productId, { is_archived: true }, { is_archived: false }, request);
+
+      return NextResponse.json({
+        success: true,
+        message: 'Product restored successfully',
+        data
+      });
+    }
+
+    // Archive product (soft delete)
+    const { data, error } = await supabase
+      .from('products')
+      .update({
+        is_archived: true,
+        is_active: false,
+        archived_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', productId)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    logProductDelete(productId, existing?.name ?? productId, request);
+
+    // Remove from cart and wishlists when archiving
     await supabase
       .from('cart')
       .delete()
@@ -295,53 +393,18 @@ export async function DELETE(request: NextRequest) {
       .delete()
       .eq('product_id', productId);
 
-    await supabase
-      .from('popular_products')
-      .delete()
-      .eq('product_id', productId);
-
-    await supabase
-      .from('inventory_logs')
-      .delete()
-      .eq('product_id', productId);
-
-    let { data: orderItems } = await supabase
-      .from('order_items')
-      .select('id')
-      .eq('product_id', productId);
-
-    if (orderItems && orderItems.length > 0) {
-      await supabase
-        .from('reviews')
-        .delete()
-        .in('order_item_id', orderItems.map(item => item.id));
-
-      await supabase
-        .from('order_items')
-        .delete()
-        .eq('product_id', productId);
-    }
-
-    const { error } = await supabase
-      .from('products')
-      .delete()
-      .eq('id', productId);
-
-    if (error) {
-      throw error;
-    }
-
     return NextResponse.json({
       success: true,
-      message: 'Product and related data deleted successfully'
+      message: 'Product archived successfully',
+      data
     });
 
   } catch (error) {
-    console.error('Product deletion error:', error);
+    console.error('Product archive error:', error);
     return NextResponse.json(
       {
         success: false,
-        error: 'Failed to delete product',
+        error: 'Failed to archive product',
         details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }

@@ -1,216 +1,134 @@
 // app/api/admin/reports/fast-moving/route.ts
-// COMPLETE CORRECTED VERSION
-
+//
+// Classification rule (simple, explainable to staff):
+//   Very Fast  = sold ≥ (days)      units in period  → e.g. ≥30 in 30 days
+//   Fast       = sold ≥ (days ÷ 3)  units in period  → e.g. ≥10 in 30 days
+//
+// The thresholds are returned in the response so the UI can display the rule
+// transparently without staff needing to know what "velocity" means.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+const VALID_STATUSES = ["Delivered", "Confirmed", "Processing", "Pending", "Shipped"];
+
+/** Thresholds scale with the chosen period so the rule stays consistent. */
+function getThresholds(days: number) {
+  return {
+    fast:     Math.ceil(days / 3), // e.g. 10 for 30d | 5 for 14d | 3 for 7d
+    veryFast: days,                // e.g. 30 for 30d | 14 for 14d | 7 for 7d
+  };
+}
+
+function getRestockStatus(stock: number): "out" | "critical" | "low" | "ok" {
+  if (stock === 0)  return "out";
+  if (stock <= 5)   return "critical";
+  if (stock <= 20)  return "low";
+  return "ok";
+}
 
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const searchParams = request.nextUrl.searchParams;
-    const days = parseInt(searchParams.get("days") || "30");
-
+    const days = Math.min(365, Math.max(1,
+      parseInt(request.nextUrl.searchParams.get("days") || "30")
+    ));
+    const thresholds = getThresholds(days);
 
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
-    const startDateISO = startDate.toISOString();
 
+    // ── Fetch active products ───────────────────────────────────────────────
+    const { data: products, error: productsError } = await supabase
+      .from("products")
+      .select("id, name, price, stocks, images")
+      .eq("is_active", true);
 
-    console.log("=== FAST-MOVING API ===");
-    console.log("Period:", days, "days");
-    console.log("Start Date:", startDateISO);
+    if (productsError) throw productsError;
 
-
-    // Get all products
-    const { data: allProducts, error: productsError } = await supabase
-      .from('products')
-      .select('*');
-
-
-    if (productsError) {
-      console.error("Products error:", productsError);
-      return NextResponse.json({
-        success: false,
-        error: productsError.message
-      }, { status: 500 });
-    }
-
-
-    console.log("Total products:", allProducts?.length || 0);
-
-
-    if (!allProducts || allProducts.length === 0) {
+    if (!products?.length) {
       return NextResponse.json({
         success: true,
         data: {
           products: [],
-          summary: {
-            totalUnitsSold: 0,
-            totalRevenue: 0,
-            needsRestockCount: 0,
-            outOfStockCount: 0
-          }
-        }
+          summary: { fastCount: 0, veryFastCount: 0, totalUnitsSold: 0, totalRevenue: 0, needsRestockCount: 0 },
+          thresholds,
+          days,
+        },
       });
     }
 
+    // ── Fetch order items in the period ────────────────────────────────────
+    const { data: orderItems } = await supabase
+      .from("order_items")
+      .select("product_id, quantity, item_amount, orders(id, order_status)")
+      .gte("created_at", startDate.toISOString());
 
-    // Get order items with date filter
-    const { data: orderItems, error: orderItemsError } = await supabase
-      .from('order_items')
-      .select(`
-        *,
-        orders (
-          id,
-          order_status,
-          created_at
-        )
-      `)
-      .gte('created_at', startDateISO);
+    // ── Aggregate sales per product ────────────────────────────────────────
+    type SalesEntry = { units: number; revenue: number; orderIds: Set<string> };
+    const salesMap: Record<string, SalesEntry> = {};
 
-
-    console.log("Order items found:", orderItems?.length || 0);
-
-
-    if (orderItemsError) {
-      console.error("Order items error:", orderItemsError);
+    for (const item of orderItems ?? []) {
+      const order = (item as any).orders;
+      if (!VALID_STATUSES.includes(order?.order_status)) continue;
+      const pid = item.product_id;
+      if (!salesMap[pid]) salesMap[pid] = { units: 0, revenue: 0, orderIds: new Set() };
+      salesMap[pid].units    += item.quantity ?? 0;
+      salesMap[pid].revenue  += (item as any).item_amount ?? 0;
+      if (order?.id) salesMap[pid].orderIds.add(order.id);
     }
 
+    // ── Build result ───────────────────────────────────────────────────────
+    const result = products
+      .map((p) => {
+        const sales      = salesMap[p.id] ?? { units: 0, revenue: 0, orderIds: new Set<string>() };
+        const totalStock = Object.values((p.stocks as Record<string, number>) ?? {})
+          .reduce((s, q) => s + (q ?? 0), 0);
 
-    // Calculate metrics for each product
-    const productsWithMetrics = allProducts.map(product => {
-      // Find all order items for this product with valid status
-      const productOrders = (orderItems || []).filter((item: any) => {
-        const matchesProduct = item.product_id === product.id;
-        const validStatuses = ['Delivered', 'Confirmed', 'Processing', 'Pending', 'Shipped'];
-        const hasValidStatus = validStatuses.includes(item.orders?.order_status);
-        return matchesProduct && hasValidStatus;
-      });
+        const restockStatus = getRestockStatus(totalStock);
+        const avgDailySales = parseFloat((sales.units / days).toFixed(2));
+        const daysRemaining = avgDailySales > 0 ? Math.floor(totalStock / avgDailySales) : null;
 
+        let classification: "very_fast" | "fast" | null = null;
+        if (sales.units >= thresholds.veryFast) classification = "very_fast";
+        else if (sales.units >= thresholds.fast)  classification = "fast";
 
-      const totalQuantitySold = productOrders.reduce(
-        (sum: number, item: any) => sum + (item.quantity || 0),
-        0
-      );
-
-
-      const totalRevenue = productOrders.reduce(
-        (sum: number, item: any) => sum + (item.item_amount || 0),
-        0
-      );
-
-
-      const orderCount = new Set(
-        productOrders.map((item: any) => item.orders?.id).filter(Boolean)
-      ).size;
-
-
-      // Calculate total stock from stocks object
-      const stocksObj = product.stocks || {};
-      const totalStock = Object.values(stocksObj).reduce(
-        (sum: number, qty: any) => sum + (qty || 0),
-        0
-      );
-
-
-      const velocity = totalQuantitySold / days;
-      const daysUntilStockout = velocity > 0 ? Math.floor(totalStock / velocity) : 0;
-
-
-      // CATEGORIZATION LOGIC:
-      // Fast-Moving = sells 1 or more units per day (30+ units in 30 days)
-      // Very Fast = sells 3 or more units per day (90+ units in 30 days)
-
-
-      let status = "fast";
-      let needsRestock = false;
-
-
-      if (velocity >= 3.0) {
-        status = "very_fast";  // Sells 90+ units per month
-      } else if (velocity >= 1.0) {
-        status = "fast";       // Sells 30-89 units per month
-      }
-
-
-      // Stock status check
-      if (totalStock === 0) {
-        needsRestock = true;
-      } else if (totalStock < 10 || (daysUntilStockout > 0 && daysUntilStockout < 7)) {
-        needsRestock = true;
-      }
-
-
-      // Get first image from images array
-      const productImage = Array.isArray(product.images) && product.images.length > 0
-        ? product.images[0]
-        : null;
-
-
-      return {
-        productId: product.id,
-        productName: product.name || 'Unknown Product',
-        productPrice: product.price || 0,
-        productImage,
-        totalQuantitySold,
-        totalRevenue,
-        orderCount,
-        currentStock: totalStock,
-        velocity: parseFloat(velocity.toFixed(2)),
-        daysUntilStockout,
-        needsRestock,
-        status
-      };
-    });
-
-
-    // FAST-MOVING FILTER:
-    // Only show products with velocity >= 1.0 (30+ units sold in 30 days)
-    // This means the product sells at least 1 unit per day on average
-    const fastMovingProducts = productsWithMetrics
-      .filter(product => product.velocity >= 1.0)
-      .sort((a, b) => b.velocity - a.velocity);
-
-
-    console.log("Fast-moving products:", fastMovingProducts.length);
-    if (fastMovingProducts.length > 0) {
-      console.log("Top product:", fastMovingProducts[0].productName,
-                  "- Velocity:", fastMovingProducts[0].velocity);
-    }
-
+        return {
+          productId:    p.id,
+          productName:  p.name ?? "Unknown",
+          productPrice: p.price ?? 0,
+          productImage: Array.isArray(p.images) ? (p.images[0] ?? null) : null,
+          unitsSold:    sales.units,
+          totalRevenue: sales.revenue,
+          orderCount:   sales.orderIds.size,
+          currentStock: totalStock,
+          restockStatus,
+          avgDailySales,
+          daysRemaining,
+          classification,
+        };
+      })
+      .filter((p) => p.classification !== null)
+      .sort((a, b) => b.unitsSold - a.unitsSold);
 
     const summary = {
-      totalUnitsSold: fastMovingProducts.reduce((sum, p) => sum + p.totalQuantitySold, 0),
-      totalRevenue: fastMovingProducts.reduce((sum, p) => sum + p.totalRevenue, 0),
-      needsRestockCount: fastMovingProducts.filter(p => p.needsRestock).length,
-      outOfStockCount: fastMovingProducts.filter(p => p.status === "out_of_stock").length
+      fastCount:        result.filter((p) => p.classification === "fast").length,
+      veryFastCount:    result.filter((p) => p.classification === "very_fast").length,
+      totalUnitsSold:   result.reduce((s, p) => s + p.unitsSold, 0),
+      totalRevenue:     result.reduce((s, p) => s + p.totalRevenue, 0),
+      needsRestockCount: result.filter((p) => p.restockStatus !== "ok").length,
     };
-
-
-    console.log("Summary:", summary);
-
 
     return NextResponse.json({
       success: true,
-      data: {
-        products: fastMovingProducts,
-        summary
-      }
+      data: { products: result, summary, thresholds, days },
     });
 
-
   } catch (error) {
-    console.error("Fast-moving API error:", error);
+    console.error("[FastMoving]", error);
     return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to fetch fast-moving items",
-        details: error instanceof Error ? error.message : "Unknown error"
-      },
+      { success: false, error: "Failed to fetch fast-moving items" },
       { status: 500 }
     );
   }
 }
-

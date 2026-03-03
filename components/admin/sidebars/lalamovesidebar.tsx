@@ -129,27 +129,27 @@ export default function LalaMoveSidebar({ order, onClose, onStatusUpdate }: Lala
           <h3 className="text-lg font-semibold text-green-800 mb-2">
             Delivery Created Successfully!
           </h3>
-          <p className="text-[#b8a070] mb-6">
+          <p className="text-[#7a6a4a] mb-6">
             Your order has been dispatched via LalaMove
           </p>
         </div>
 
         <div className="bg-gray-100 rounded-lg p-4 space-y-3">
           <div className="flex justify-between">
-            <span className="text-sm text-[#b8a070]">LalaMove Order ID:</span>
+            <span className="text-sm text-[#7a6a4a]">LalaMove Order ID:</span>
             <span className="font-mono text-sm">{deliveryResult.lalamoveOrderId}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-sm text-[#b8a070]">Delivery Cost:</span>
+            <span className="text-sm text-[#7a6a4a]">Delivery Cost:</span>
             <span className="font-medium">{deliveryResult.deliveryAmount} {deliveryResult.currency}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-sm text-[#b8a070]">Status:</span>
+            <span className="text-sm text-[#7a6a4a]">Status:</span>
             <span className="font-medium">{deliveryResult.status}</span>
           </div>
           {deliveryResult.shareLink && (
             <div>
-              <span className="text-sm text-[#b8a070]">Tracking Link:</span>
+              <span className="text-sm text-[#7a6a4a]">Tracking Link:</span>
               <a 
                 href={deliveryResult.shareLink} 
                 target="_blank" 
@@ -189,13 +189,13 @@ export default function LalaMoveSidebar({ order, onClose, onStatusUpdate }: Lala
             
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-[#f5e6d3] mb-1">
+                <label className="block text-sm font-medium text-[#1c1810] mb-1">
                   Business Address
                 </label>
                 <textarea
                   value={deliveryDetails.pickupAddress}
                   onChange={(e) => setDeliveryDetails(prev => ({ ...prev, pickupAddress: e.target.value }))}
-                  className="w-full p-3 border border-[#d4af37]/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full p-3 border border-[#e8e0d0] rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   rows={2}
                   placeholder="Your complete business address..."
                 />
@@ -203,7 +203,7 @@ export default function LalaMoveSidebar({ order, onClose, onStatusUpdate }: Lala
               
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-[#f5e6d3] mb-1">
+                  <label className="block text-sm font-medium text-[#1c1810] mb-1">
                     Latitude
                   </label>
                   <input
@@ -211,12 +211,12 @@ export default function LalaMoveSidebar({ order, onClose, onStatusUpdate }: Lala
                     step="any"
                     value={deliveryDetails.pickupLat}
                     onChange={(e) => setDeliveryDetails(prev => ({ ...prev, pickupLat: e.target.value }))}
-                    className="w-full p-3 border border-[#d4af37]/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full p-3 border border-[#e8e0d0] rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="14.5995"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[#f5e6d3] mb-1">
+                  <label className="block text-sm font-medium text-[#1c1810] mb-1">
                     Longitude
                   </label>
                   <input
@@ -224,7 +224,7 @@ export default function LalaMoveSidebar({ order, onClose, onStatusUpdate }: Lala
                     step="any"
                     value={deliveryDetails.pickupLng}
                     onChange={(e) => setDeliveryDetails(prev => ({ ...prev, pickupLng: e.target.value }))}
-                    className="w-full p-3 border border-[#d4af37]/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full p-3 border border-[#e8e0d0] rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="120.9842"
                   />
                 </div>
@@ -232,25 +232,25 @@ export default function LalaMoveSidebar({ order, onClose, onStatusUpdate }: Lala
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-[#f5e6d3] mb-1">
+                  <label className="block text-sm font-medium text-[#1c1810] mb-1">
                     Sender Name
                   </label>
                   <input
                     type="text"
                     value={deliveryDetails.senderName}
                     onChange={(e) => setDeliveryDetails(prev => ({ ...prev, senderName: e.target.value }))}
-                    className="w-full p-3 border border-[#d4af37]/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full p-3 border border-[#e8e0d0] rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[#f5e6d3] mb-1">
+                  <label className="block text-sm font-medium text-[#1c1810] mb-1">
                     Sender Phone
                   </label>
                   <input
                     type="tel"
                     value={deliveryDetails.senderPhone}
                     onChange={(e) => setDeliveryDetails(prev => ({ ...prev, senderPhone: e.target.value }))}
-                    className="w-full p-3 border border-[#d4af37]/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full p-3 border border-[#e8e0d0] rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="+63912345678"
                   />
                 </div>
@@ -263,13 +263,13 @@ export default function LalaMoveSidebar({ order, onClose, onStatusUpdate }: Lala
             
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-[#f5e6d3] mb-1">
+                <label className="block text-sm font-medium text-[#1c1810] mb-1">
                   Delivery Address *
                 </label>
                 <textarea
                   value={deliveryDetails.deliveryAddress}
                   onChange={(e) => setDeliveryDetails(prev => ({ ...prev, deliveryAddress: e.target.value }))}
-                  className="w-full p-3 border border-[#d4af37]/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full p-3 border border-[#e8e0d0] rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   rows={2}
                   placeholder="Customer's complete delivery address..."
                 />
@@ -277,7 +277,7 @@ export default function LalaMoveSidebar({ order, onClose, onStatusUpdate }: Lala
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-[#f5e6d3] mb-1">
+                  <label className="block text-sm font-medium text-[#1c1810] mb-1">
                     Latitude *
                   </label>
                   <input
@@ -285,12 +285,12 @@ export default function LalaMoveSidebar({ order, onClose, onStatusUpdate }: Lala
                     step="any"
                     value={deliveryDetails.deliveryLat}
                     onChange={(e) => setDeliveryDetails(prev => ({ ...prev, deliveryLat: e.target.value }))}
-                    className="w-full p-3 border border-[#d4af37]/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full p-3 border border-[#e8e0d0] rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="14.6042"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[#f5e6d3] mb-1">
+                  <label className="block text-sm font-medium text-[#1c1810] mb-1">
                     Longitude *
                   </label>
                   <input
@@ -298,7 +298,7 @@ export default function LalaMoveSidebar({ order, onClose, onStatusUpdate }: Lala
                     step="any"
                     value={deliveryDetails.deliveryLng}
                     onChange={(e) => setDeliveryDetails(prev => ({ ...prev, deliveryLng: e.target.value }))}
-                    className="w-full p-3 border border-[#d4af37]/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full p-3 border border-[#e8e0d0] rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="120.9822"
                   />
                 </div>
@@ -306,25 +306,25 @@ export default function LalaMoveSidebar({ order, onClose, onStatusUpdate }: Lala
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-[#f5e6d3] mb-1">
+                  <label className="block text-sm font-medium text-[#1c1810] mb-1">
                     Recipient Name
                   </label>
                   <input
                     type="text"
                     value={deliveryDetails.recipientName}
                     onChange={(e) => setDeliveryDetails(prev => ({ ...prev, recipientName: e.target.value }))}
-                    className="w-full p-3 border border-[#d4af37]/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full p-3 border border-[#e8e0d0] rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[#f5e6d3] mb-1">
+                  <label className="block text-sm font-medium text-[#1c1810] mb-1">
                     Recipient Phone *
                   </label>
                   <input
                     type="tel"
                     value={deliveryDetails.recipientPhone}
                     onChange={(e) => setDeliveryDetails(prev => ({ ...prev, recipientPhone: e.target.value }))}
-                    className="w-full p-3 border border-[#d4af37]/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full p-3 border border-[#e8e0d0] rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="+63987654321"
                   />
                 </div>
@@ -333,13 +333,13 @@ export default function LalaMoveSidebar({ order, onClose, onStatusUpdate }: Lala
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-[#f5e6d3] mb-1">
+            <label className="block text-sm font-medium text-[#1c1810] mb-1">
               Vehicle Type
             </label>
             <select
               value={deliveryDetails.serviceType}
               onChange={(e) => setDeliveryDetails(prev => ({ ...prev, serviceType: e.target.value }))}
-              className="w-full p-3 border border-[#d4af37]/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full p-3 border border-[#e8e0d0] rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="MOTORCYCLE">Motorcycle (Small items)</option>
               <option value="CAR">Car (Medium items)</option>
@@ -349,13 +349,13 @@ export default function LalaMoveSidebar({ order, onClose, onStatusUpdate }: Lala
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-[#f5e6d3] mb-1">
+            <label className="block text-sm font-medium text-[#1c1810] mb-1">
               Delivery Notes
             </label>
             <textarea
               value={deliveryDetails.notes}
               onChange={(e) => setDeliveryDetails(prev => ({ ...prev, notes: e.target.value }))}
-              className="w-full p-3 border border-[#d4af37]/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full p-3 border border-[#e8e0d0] rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               rows={2}
               placeholder="Special instructions for the driver..."
             />
@@ -372,7 +372,7 @@ export default function LalaMoveSidebar({ order, onClose, onStatusUpdate }: Lala
       <div className="flex gap-3 pt-4 border-t">
         <button
           onClick={onClose}
-          className="flex-1 px-4 py-2 border border-[#d4af37]/20 hover:bg-gray-100 rounded-lg"
+          className="flex-1 px-4 py-2 border border-[#e8e0d0] hover:bg-gray-100 rounded-lg"
           disabled={isCreatingDelivery}
         >
           CANCEL

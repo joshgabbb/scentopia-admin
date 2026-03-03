@@ -30,7 +30,6 @@ export async function GET(
         updated_at,
         perfume_type,
         is_active,
-        gender_tags,
         occasions_tags,
         weather_tags,
         top_notes_tags,
@@ -86,7 +85,6 @@ export async function GET(
               name: categoryData.name
             } : null;
           })() : null,
-      genderTags: product.gender_tags || [],
       occasionsTags: product.occasions_tags || [],
       weatherTags: product.weather_tags || [],
       topNotesTags: product.top_notes_tags || [],
@@ -168,7 +166,6 @@ export async function PATCH(
         updated_at,
         perfume_type,
         is_active,
-        gender_tags,
         occasions_tags,
         weather_tags,
         top_notes_tags,
@@ -255,7 +252,6 @@ export async function PATCH(
               name: categoryData.name
             } : null;
           })() : null,
-      genderTags: data.gender_tags || [],
       occasionsTags: data.occasions_tags || [],
       weatherTags: data.weather_tags || [],
       topNotesTags: data.top_notes_tags || [],

@@ -9,7 +9,7 @@ export function ConnectSupabaseSteps() {
           <a
             href="https://app.supabase.com/project/_/settings/api"
             target="_blank"
-            className="font-bold hover:underline text-[#f5e6d3]/80"
+            className="font-bold hover:underline text-[#1c1810]/80"
             rel="noreferrer"
           >
             database.new
@@ -32,7 +32,7 @@ export function ConnectSupabaseSteps() {
           <a
             href="https://app.supabase.com/project/_/settings/api"
             target="_blank"
-            className="font-bold hover:underline text-[#f5e6d3]/80"
+            className="font-bold hover:underline text-[#1c1810]/80"
             rel="noreferrer"
           >
             your Supabase project&apos;s API Settings
