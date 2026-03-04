@@ -183,12 +183,13 @@ export default function CategoriesPage() {
       const result = await response.json();
 
       if (!result.success) {
-        throw new Error(result.error || "Failed to update category status");
+        const msg = result.details ? `${result.error}: ${result.details}` : result.error;
+        throw new Error(msg || "Failed to update category status");
       }
 
       fetchCategories();
     } catch (err) {
-      console.error("Toggle status error:", err);
+      setError(err instanceof Error ? err.message : "Failed to update category status");
     }
   };
 

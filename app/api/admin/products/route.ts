@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { logProductCreate, logProductUpdate, logProductDelete } from "@/lib/audit-logger";
 
@@ -161,9 +161,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
-  
+  // authClient for session-aware operations (getUser), adminDb for writes
+  const authClient = await createClient();
+
   try {
+    const supabase = createAdminClient();
     const body = await request.json();
     const {
       name,
@@ -210,7 +212,7 @@ export async function POST(request: NextRequest) {
 
     // Insert initial stock movements for each size
     if (data && stocks && typeof stocks === 'object') {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const { data: { user: authUser } } = await authClient.auth.getUser();
       const stockEntries = Object.entries(stocks as Record<string, number>).filter(([, qty]) => qty > 0);
       if (stockEntries.length > 0) {
         await supabase.from('stock_movements').insert(
@@ -248,9 +250,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const supabase = await createClient();
-
   try {
+    const supabase = createAdminClient();
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get('id');
 
@@ -316,9 +317,8 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const supabase = await createClient();
-
   try {
+    const supabase = createAdminClient();
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get('id');
     const action = searchParams.get('action') || 'archive'; // 'archive' or 'restore'

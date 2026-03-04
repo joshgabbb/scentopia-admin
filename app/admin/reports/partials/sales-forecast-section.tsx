@@ -168,11 +168,11 @@ export default function SalesForecastingSection() {
 
       {/* Error State */}
       {error && (
-        <div className="mb-6 p-4 bg-red-900/20 border border-red-500/30">
-          <p className="text-red-400">
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded">
+          <p className="text-red-700">
             <strong>Error:</strong> {error}
           </p>
-          <p className="text-red-400/70 text-sm mt-2">
+          <p className="text-red-500 text-sm mt-2">
             Make sure you have order data in your database.
           </p>
         </div>
@@ -246,32 +246,34 @@ export default function SalesForecastingSection() {
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e8e0d0" />
                   <XAxis
                     dataKey="month"
-                    tick={{ fontSize: 11, fill: '#b8a070' }}
+                    tick={{ fontSize: 11, fill: '#7a6a4a' }}
                     angle={-45}
                     textAnchor="end"
                     height={60}
-                    stroke="#444"
+                    stroke="#e8e0d0"
                   />
                   <YAxis
-                    tick={{ fontSize: 11, fill: '#b8a070' }}
+                    tick={{ fontSize: 11, fill: '#7a6a4a' }}
                     tickFormatter={(value) => `₱${(value / 1000).toFixed(0)}k`}
-                    stroke="#444"
+                    stroke="#e8e0d0"
                   />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: '#1a1a1a',
-                      border: '1px solid #d4af37',
-                      color: '#f5e6d3'
+                      backgroundColor: '#ffffff',
+                      border: '1px solid #e8e0d0',
+                      color: '#1c1810',
+                      borderRadius: '4px',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
                     }}
                     formatter={(value: any, name: any, props: any) => [
                       formatCurrency(value),
                       props.payload.type === 'historical' ? 'Actual Sales' : 'Predicted Sales'
                     ]}
                     labelFormatter={(label) => label}
-                    labelStyle={{ color: '#d4af37' }}
+                    labelStyle={{ color: '#8B6914', fontWeight: 600 }}
                   />
                   <Line
                     type="monotone"
@@ -316,25 +318,27 @@ export default function SalesForecastingSection() {
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={forecastData.monthlyBreakdown}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e8e0d0" />
                   <XAxis
                     dataKey="month"
-                    tick={{ fontSize: 11, fill: '#b8a070' }}
-                    stroke="#444"
+                    tick={{ fontSize: 11, fill: '#7a6a4a' }}
+                    stroke="#e8e0d0"
                   />
                   <YAxis
-                    tick={{ fontSize: 11, fill: '#b8a070' }}
+                    tick={{ fontSize: 11, fill: '#7a6a4a' }}
                     tickFormatter={(value) => `₱${(value / 1000).toFixed(0)}k`}
-                    stroke="#444"
+                    stroke="#e8e0d0"
                   />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: '#1a1a1a',
-                      border: '1px solid #d4af37',
-                      color: '#f5e6d3'
+                      backgroundColor: '#ffffff',
+                      border: '1px solid #e8e0d0',
+                      color: '#1c1810',
+                      borderRadius: '4px',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
                     }}
                     formatter={(value: any) => [formatCurrency(value), 'Expected Sales']}
-                    labelStyle={{ color: '#d4af37' }}
+                    labelStyle={{ color: '#8B6914', fontWeight: 600 }}
                   />
                   <Bar
                     dataKey="predictedSales"

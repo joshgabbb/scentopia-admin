@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { CategoryData } from "../route";
 // ✅ ADD THIS IMPORT
@@ -115,8 +115,8 @@ export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const supabase = await createClient();
   try {
+    const supabase = createAdminClient();
     const { id: productId } = await context.params;
     if (!productId) {
       return NextResponse.json(
@@ -282,8 +282,8 @@ export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const supabase = await createClient();
   try {
+    const supabase = createAdminClient();
     const { id: productId } = await context.params;
     if (!productId) {
       return NextResponse.json(

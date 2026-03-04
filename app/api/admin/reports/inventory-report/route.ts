@@ -32,7 +32,17 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Sum all size quantities from the stocks JSONB object: {"30ml": 5, "50ml": 10} → 15
+function sumStocks(stocks: unknown): number {
+  if (!stocks || typeof stocks !== 'object' || Array.isArray(stocks)) return 0;
+  return Object.values(stocks as Record<string, unknown>).reduce(
+    (sum, v) => sum + (Number(v) || 0),
+    0
+  );
+}
+
 async function getStockLevelsReport(supabase: any) {
+  // Table is `category` (not `categories`) per your schema
   const { data: products, error } = await supabase
     .from('products')
     .select(`
@@ -40,19 +50,22 @@ async function getStockLevelsReport(supabase: any) {
       name,
       price,
       stocks,
+      sizes,
       is_active,
       updated_at,
-      categories!products_category_id_fkey(
+      category!products_category_id_fkey(
         name
       )
     `)
     .eq('is_active', true)
+    .eq('is_archived', false)
     .order('name', { ascending: true });
 
   if (error) throw error;
 
   const formattedProducts = products?.map((product: any) => {
-    const stock = Number(product.stocks) || 0;
+    // stocks is JSONB: {"30ml": 5, "50ml": 10} — sum all sizes
+    const stock = sumStocks(product.stocks);
     let status = 'In Stock';
     if (stock === 0) status = 'Out of Stock';
     else if (stock <= 10) status = 'Low Stock';
@@ -61,7 +74,7 @@ async function getStockLevelsReport(supabase: any) {
     return {
       id: product.id,
       name: product.name,
-      category: product.categories?.name || 'Uncategorized',
+      category: product.category?.name || 'Uncategorized',
       price: Number(product.price) || 0,
       stock,
       status,
@@ -95,6 +108,8 @@ async function getStockLevelsReport(supabase: any) {
 }
 
 async function getLowStockReport(supabase: any, threshold: number) {
+  // Fetch all active products — filter by computed total stock in JS
+  // because stocks is JSONB and cannot be compared with .lte() directly
   const { data: products, error } = await supabase
     .from('products')
     .select(`
@@ -102,47 +117,52 @@ async function getLowStockReport(supabase: any, threshold: number) {
       name,
       price,
       stocks,
+      sizes,
       is_active,
       updated_at,
-      categories!products_category_id_fkey(
+      category!products_category_id_fkey(
         name
       )
     `)
     .eq('is_active', true)
-    .lte('stocks', threshold)
-    .order('stocks', { ascending: true });
+    .eq('is_archived', false)
+    .order('name', { ascending: true });
 
   if (error) throw error;
 
-  const formattedProducts = products?.map((product: any) => {
-    const stock = Number(product.stocks) || 0;
-    let status = 'Low Stock';
-    let priority = 'Medium';
+  const formattedProducts = (products ?? [])
+    .map((product: any) => {
+      const stock = sumStocks(product.stocks);
+      let status = 'Low Stock';
+      let priority = 'Medium';
 
-    if (stock === 0) {
-      status = 'Out of Stock';
-      priority = 'Critical';
-    } else if (stock <= 5) {
-      priority = 'High';
-    }
+      if (stock === 0) {
+        status = 'Out of Stock';
+        priority = 'Critical';
+      } else if (stock <= 5) {
+        priority = 'High';
+      }
 
-    return {
-      id: product.id,
-      name: product.name,
-      category: product.categories?.name || 'Uncategorized',
-      price: Number(product.price) || 0,
-      stock,
-      status,
-      priority,
-      lastUpdated: product.updated_at
-        ? new Date(product.updated_at).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-          })
-        : 'N/A',
-    };
-  }) || [];
+      return {
+        id: product.id,
+        name: product.name,
+        category: product.category?.name || 'Uncategorized',
+        price: Number(product.price) || 0,
+        stock,
+        status,
+        priority,
+        lastUpdated: product.updated_at
+          ? new Date(product.updated_at).toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+            })
+          : 'N/A',
+      };
+    })
+    // Apply threshold filter after computing total stock
+    .filter(p => p.stock <= threshold)
+    .sort((a, b) => a.stock - b.stock);
 
   const outOfStockCount = formattedProducts.filter(p => p.status === 'Out of Stock').length;
   const criticalCount = formattedProducts.filter(p => p.priority === 'Critical').length;
@@ -164,78 +184,46 @@ async function getLowStockReport(supabase: any, threshold: number) {
 }
 
 async function getStockMovementReport(supabase: any) {
-  // Try to get audit logs for stock movements
-  const { data: auditLogs, error: auditError } = await supabase
-    .from('audit_logs')
-    .select('*')
-    .eq('action', 'stock_update')
-    .order('created_at', { ascending: false })
-    .limit(100);
-
-  if (!auditError && auditLogs && auditLogs.length > 0) {
-    const movements = auditLogs.map((log: any) => ({
-      id: log.id,
-      productName: log.metadata?.product_name || 'Unknown Product',
-      previousStock: log.metadata?.previous_stock || 0,
-      newStock: log.metadata?.new_stock || 0,
-      change: (log.metadata?.new_stock || 0) - (log.metadata?.previous_stock || 0),
-      reason: log.metadata?.reason || 'Stock update',
-      date: new Date(log.created_at).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
-    }));
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        movements,
-        summary: {
-          totalMovements: movements.length,
-        },
-      },
-    });
-  }
-
-  // Fallback: Calculate movement from order_items (sold products)
-  const { data: recentOrderItems, error } = await supabase
-    .from('order_items')
+  // Use the dedicated stock_movements table (source of truth)
+  const { data: rows, error } = await supabase
+    .from('stock_movements')
     .select(`
       id,
+      type,
+      size,
       quantity,
+      previous_stock,
+      new_stock,
+      reason,
+      remarks,
       created_at,
-      products!order_items_product_id_fkey(
+      products!stock_movements_product_id_fkey(
         name
-      ),
-      orders!order_items_order_id_fkey(
-        order_status
       )
     `)
     .order('created_at', { ascending: false })
-    .limit(100);
+    .limit(200);
 
   if (error) throw error;
 
-  const movements = recentOrderItems
-    ?.filter((item: any) => item.orders?.order_status !== 'Cancelled')
-    .map((item: any) => ({
-      id: item.id,
-      productName: item.products?.name || 'Unknown Product',
-      previousStock: 'N/A',
-      newStock: 'N/A',
-      change: -(Number(item.quantity) || 0), // Negative because stock decreased
-      reason: 'Order placed',
-      date: new Date(item.created_at).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
-    })) || [];
+  const movements = (rows ?? []).map((row: any) => ({
+    id: row.id,
+    productName: row.products?.name || 'Unknown Product',
+    size: row.size,
+    type: row.type, // 'IN' | 'OUT'
+    previousStock: row.previous_stock,
+    newStock: row.new_stock,
+    change: row.type === 'IN' ? row.quantity : -row.quantity,
+    reason: row.reason || '—',
+    remarks: row.remarks || '',
+    date: new Date(row.created_at).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+  }));
 
   return NextResponse.json({
     success: true,
@@ -243,7 +231,8 @@ async function getStockMovementReport(supabase: any) {
       movements,
       summary: {
         totalMovements: movements.length,
-        note: 'Stock movement derived from orders (audit logs not available)',
+        totalIn: movements.filter(m => m.type === 'IN').reduce((s, m) => s + m.quantity, 0),
+        totalOut: movements.filter(m => m.type === 'OUT').reduce((s, m) => s + Math.abs(m.change), 0),
       },
     },
   });

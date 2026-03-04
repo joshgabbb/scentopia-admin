@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { Truck, ExternalLink, Package, MapPin, Clock, Copy, Check, User, Phone } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface Order {
   id: string;
@@ -46,7 +47,8 @@ const SHIPPING_ZONES = {
 const WEIGHT_FEE_PER_500G = 20;
 
 export default function JntSidebar({ order, onClose, onStatusUpdate }: JntSidebarProps) {
-  // Get recipient info from order's delivery location or customer profile (already registered)
+  const { themeClasses: tc, isDark } = useTheme();
+
   const recipientName = order.deliveryLocation?.recipient_name || order.recipientName || order.customerName || '';
   const recipientPhone = order.deliveryLocation?.phone_number || order.recipientPhone || order.customerPhone || '';
   const regionName = order.deliveryLocation?.region?.name || '';
@@ -68,7 +70,6 @@ export default function JntSidebar({ order, onClose, onStatusUpdate }: JntSideba
   const [error, setError] = useState<string>('');
   const [copied, setCopied] = useState(false);
 
-  // Auto-detect shipping zone based on region
   useEffect(() => {
     const region = regionName.toLowerCase();
     if (region.includes('ncr') || region.includes('metro manila') || region.includes('national capital')) {
@@ -89,7 +90,6 @@ export default function JntSidebar({ order, onClose, onStatusUpdate }: JntSideba
     }
   }, [regionName]);
 
-  // Use existing shipping fee from order if available, otherwise calculate
   useEffect(() => {
     if (order.shippingFee && order.shippingFee > 0) {
       setShippingFee(order.shippingFee);
@@ -148,8 +148,6 @@ export default function JntSidebar({ order, onClose, onStatusUpdate }: JntSideba
         zone: selectedZone,
       };
 
-      console.log('Creating J&T delivery with:', deliveryRequest);
-
       const response = await fetch('/api/admin/orders/create-jnt-delivery', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -177,7 +175,6 @@ export default function JntSidebar({ order, onClose, onStatusUpdate }: JntSideba
           trackingUrl: `https://www.jtexpress.ph/index/query/gzquery.html?waybillnumber=${waybillNumber}`
         });
 
-        // Update order status to Shipped
         try {
           const statusResponse = await fetch(`/api/admin/orders/${order.id}/status`, {
             method: 'PATCH',
@@ -193,13 +190,12 @@ export default function JntSidebar({ order, onClose, onStatusUpdate }: JntSideba
             onStatusUpdate('Shipped');
           }
         } catch (statusError) {
-          console.error('Failed to update order status:', statusError);
+          // Status update failure is non-critical
         }
       } else {
         throw new Error(result.error || 'Failed to create delivery');
       }
     } catch (error) {
-      console.error('Failed to create delivery:', error);
       setError(error instanceof Error ? error.message : 'Failed to create delivery');
     } finally {
       setIsCreatingDelivery(false);
@@ -214,57 +210,61 @@ export default function JntSidebar({ order, onClose, onStatusUpdate }: JntSideba
     }
   };
 
-  // Success screen
+  // Conditional red-tint card classes for dark/light mode
+  const redCardClass = isDark
+    ? 'bg-red-900/20 border border-red-800/40'
+    : 'bg-red-50 border border-red-200';
+
+  const inputClass = `w-full px-3 py-2.5 rounded-md border ${tc.border} ${tc.inputBg} ${tc.text} text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors`;
+
+  // ── Success screen ──────────────────────────────────────────────────────────
   if (deliveryResult) {
     return (
-      <div className="p-0 space-y-4 bg-white">
+      <div className={`p-0 space-y-4 ${tc.bg}`}>
         {/* Success Header */}
-        <div className="bg-gradient-to-r from-green-500 to-green-600 -mx-6 -mt-6 px-6 py-6 mb-4 text-center">
-          <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg">
-            <Check size={32} className="text-green-600" />
+        <div className="bg-gradient-to-r from-green-600 to-green-700 -mx-6 -mt-6 px-6 py-6 mb-4 text-center">
+          <div className={`w-14 h-14 ${tc.bg} rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg`}>
+            <Check size={28} className="text-green-600" />
           </div>
-          <h3 className="text-xl font-bold text-white">
-            Shipment Created!
-          </h3>
-          <p className="text-green-100 text-sm mt-1">
-            J&T Express delivery confirmed
-          </p>
+          <h3 className="text-lg font-bold text-white tracking-wide">Shipment Created</h3>
+          <p className="text-green-100 text-sm mt-0.5">J&T Express delivery confirmed</p>
         </div>
 
         {/* Waybill Card */}
-        <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4">
-          <div className="text-center mb-3">
-            <p className="text-xs text-red-600 font-semibold uppercase tracking-wider">Waybill Number</p>
-            <div className="flex items-center justify-center gap-2 mt-1">
-              <span className="font-mono text-xl font-bold text-red-700">{deliveryResult.waybillNumber}</span>
-              <button
-                onClick={copyWaybill}
-                className="p-2 hover:bg-red-100 rounded-full text-red-600 transition-colors"
-                title="Copy waybill number"
-              >
-                {copied ? <Check size={18} className="text-green-600" /> : <Copy size={18} />}
-              </button>
-            </div>
+        <div className={`${redCardClass} rounded-lg p-4`}>
+          <p className="text-xs text-red-600 font-semibold uppercase tracking-wider text-center mb-2">
+            Waybill Number
+          </p>
+          <div className="flex items-center justify-center gap-2">
+            <span className="font-mono text-xl font-bold text-red-600">{deliveryResult.waybillNumber}</span>
+            <button
+              onClick={copyWaybill}
+              className={`p-1.5 rounded-md transition-colors ${isDark ? 'hover:bg-red-800/40' : 'hover:bg-red-100'}`}
+              title="Copy waybill number"
+            >
+              {copied
+                ? <Check size={16} className="text-green-500" />
+                : <Copy size={16} className="text-red-500" />
+              }
+            </button>
           </div>
         </div>
 
         {/* Details */}
-        <div className="bg-white border-2 border-gray-200 rounded-lg p-4 space-y-3">
-          <div className="flex justify-between items-center py-2 border-b border-gray-100">
-            <span className="text-sm text-gray-600">Shipping Fee</span>
-            <span className="font-bold text-red-600 text-lg">₱{deliveryResult.shippingFee.toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between items-center py-2 border-b border-gray-100">
-            <span className="text-sm text-gray-600">Delivery Zone</span>
-            <span className="font-medium text-gray-900">{deliveryResult.zone}</span>
-          </div>
-          <div className="flex justify-between items-center py-2 border-b border-gray-100">
-            <span className="text-sm text-gray-600">Expected Delivery</span>
-            <span className="font-medium text-gray-900">{deliveryResult.estimatedDelivery}</span>
-          </div>
-          <div className="flex justify-between items-center py-2">
-            <span className="text-sm text-gray-600">Status</span>
-            <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-semibold">
+        <div className={`${tc.bgSecondary} border ${tc.border} rounded-lg divide-y ${isDark ? 'divide-[#2e2a1e]' : 'divide-[#e8e0d0]'}`}>
+          {[
+            { label: 'Shipping Fee', value: `₱${deliveryResult.shippingFee.toFixed(2)}`, valueClass: 'font-bold text-red-600 text-base' },
+            { label: 'Delivery Zone', value: deliveryResult.zone, valueClass: `font-medium ${tc.text}` },
+            { label: 'Expected Delivery', value: deliveryResult.estimatedDelivery, valueClass: `font-medium ${tc.text}` },
+          ].map(({ label, value, valueClass }) => (
+            <div key={label} className="flex justify-between items-center px-4 py-3">
+              <span className={`text-sm ${tc.textMuted}`}>{label}</span>
+              <span className={`text-sm ${valueClass}`}>{value}</span>
+            </div>
+          ))}
+          <div className="flex justify-between items-center px-4 py-3">
+            <span className={`text-sm ${tc.textMuted}`}>Status</span>
+            <span className="px-2.5 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
               {deliveryResult.status}
             </span>
           </div>
@@ -276,22 +276,22 @@ export default function JntSidebar({ order, onClose, onStatusUpdate }: JntSideba
             href={deliveryResult.trackingUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 text-white bg-red-600 hover:bg-red-700 py-3 rounded-lg font-semibold transition-colors shadow-md"
+            className="flex items-center justify-center gap-2 text-white bg-red-600 hover:bg-red-700 py-2.5 rounded-md font-semibold text-sm transition-colors shadow-md"
           >
-            <ExternalLink size={18} />
+            <ExternalLink size={16} />
             Track on J&T Express
           </a>
         )}
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-          <p className="text-blue-700 text-sm">
-            <strong>✓ Customer Notified:</strong> The customer will receive a notification with the tracking number.
+        <div className={`${isDark ? 'bg-blue-900/20 border-blue-800/40 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-700'} border rounded-lg p-3`}>
+          <p className="text-sm">
+            <strong>Customer Notified:</strong> The customer will receive a notification with the tracking number.
           </p>
         </div>
 
         <button
           onClick={onClose}
-          className="w-full px-4 py-3 bg-gray-800 text-white hover:bg-gray-900 rounded-lg font-semibold transition-colors"
+          className="w-full px-4 py-2.5 bg-red-600 text-white hover:bg-red-700 rounded-md font-semibold text-sm tracking-wider transition-colors shadow-sm"
         >
           DONE
         </button>
@@ -299,81 +299,89 @@ export default function JntSidebar({ order, onClose, onStatusUpdate }: JntSideba
     );
   }
 
+  // ── Main form ───────────────────────────────────────────────────────────────
   return (
-    <div className="p-0 space-y-4 bg-white">
+    <div className={`p-0 space-y-4 ${tc.bg}`}>
       {/* J&T Header */}
       <div className="bg-gradient-to-r from-red-600 to-red-700 -mx-6 -mt-6 px-6 py-4 mb-4">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center shadow-md">
-            <Truck size={24} className="text-red-600" />
+          <div className={`w-11 h-11 ${tc.bg} rounded-md flex items-center justify-center shadow-md flex-shrink-0`}>
+            <Truck size={22} className="text-red-600" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-white">J&T Express</h3>
-            <p className="text-sm text-red-100">Order {order.orderNumber}</p>
+            <h3 className="text-base font-bold text-white tracking-wide">J&T Express</h3>
+            <p className="text-xs text-red-100">Order #{order.orderNumber}</p>
           </div>
         </div>
       </div>
 
+      {/* Error */}
       {error && (
-        <div className="bg-red-50 border border-red-300 rounded-lg p-3">
-          <p className="text-red-700 text-sm font-medium">{error}</p>
+        <div className="bg-red-50 border border-red-300 rounded-md p-3">
+          <p className="text-red-700 text-sm">{error}</p>
         </div>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         {/* Recipient Information */}
-        <div className="bg-white border-2 border-red-100 rounded-lg p-4">
-          <h4 className="font-semibold text-red-700 mb-3 flex items-center gap-2 text-sm uppercase tracking-wide">
-            <User size={16} />
-            Recipient Information
+        <div className={`${tc.bgSecondary} border ${tc.border} rounded-lg p-4`}>
+          <h4 className="font-semibold text-red-600 mb-3 flex items-center gap-2 text-xs uppercase tracking-widest">
+            <User size={14} />
+            Recipient
           </h4>
-          <div className="space-y-2 text-sm">
-            <div className="flex items-center gap-2 text-gray-800">
-              <User size={14} className="text-red-500" />
-              <span className="font-medium">{recipientName || 'Not provided'}</span>
+          <div className="space-y-2">
+            <div className={`flex items-center gap-2 text-sm ${tc.text}`}>
+              <User size={13} className="text-red-500 flex-shrink-0" />
+              <span className="font-medium">{recipientName || <span className={tc.textMuted}>Not provided</span>}</span>
             </div>
-            <div className="flex items-center gap-2 text-gray-800">
-              <Phone size={14} className="text-red-500" />
-              <span>{recipientPhone || 'Not provided'}</span>
+            <div className={`flex items-center gap-2 text-sm ${tc.text}`}>
+              <Phone size={13} className="text-red-500 flex-shrink-0" />
+              <span>{recipientPhone || <span className={tc.textMuted}>Not provided</span>}</span>
             </div>
           </div>
         </div>
 
         {/* Delivery Address */}
-        <div className="bg-white border-2 border-red-100 rounded-lg p-4">
-          <h4 className="font-semibold text-red-700 mb-3 flex items-center gap-2 text-sm uppercase tracking-wide">
-            <MapPin size={16} />
+        <div className={`${tc.bgSecondary} border ${tc.border} rounded-lg p-4`}>
+          <h4 className="font-semibold text-red-600 mb-3 flex items-center gap-2 text-xs uppercase tracking-widest">
+            <MapPin size={14} />
             Delivery Address
           </h4>
-          <p className="text-sm text-gray-800">{fullAddress || 'No address provided'}</p>
+          <p className={`text-sm leading-relaxed ${tc.text}`}>{fullAddress || <span className={tc.textMuted}>No address provided</span>}</p>
           {regionName && (
             <div className="mt-2 flex flex-wrap gap-1">
-              <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium">{regionName}</span>
-              {provinceName && <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium">{provinceName}</span>}
+              <span className={`px-2 py-0.5 rounded text-xs font-medium ${isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700'}`}>
+                {regionName}
+              </span>
+              {provinceName && (
+                <span className={`px-2 py-0.5 rounded text-xs font-medium ${isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700'}`}>
+                  {provinceName}
+                </span>
+              )}
             </div>
           )}
         </div>
 
         {/* Shipping Details */}
-        <div className="bg-white border-2 border-red-100 rounded-lg p-4">
-          <h4 className="font-semibold text-red-700 mb-3 flex items-center gap-2 text-sm uppercase tracking-wide">
-            <Clock size={16} />
+        <div className={`${tc.bgSecondary} border ${tc.border} rounded-lg p-4`}>
+          <h4 className="font-semibold text-red-600 mb-3 flex items-center gap-2 text-xs uppercase tracking-widest">
+            <Clock size={14} />
             Shipping Details
           </h4>
 
           <div className="space-y-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className={`block text-xs font-medium ${tc.textMuted} mb-1.5 uppercase tracking-wide`}>
                 Delivery Zone
               </label>
               <select
                 value={selectedZone}
                 onChange={(e) => setSelectedZone(e.target.value as keyof typeof SHIPPING_ZONES)}
-                className="w-full p-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white text-gray-900"
+                className={inputClass}
               >
                 {Object.entries(SHIPPING_ZONES).map(([key, value]) => (
                   <option key={key} value={key}>
-                    {value.label} - ₱{value.baseFee} ({value.estimatedDays} days)
+                    {value.label} — ₱{value.baseFee} ({value.estimatedDays} days)
                   </option>
                 ))}
               </select>
@@ -381,7 +389,7 @@ export default function JntSidebar({ order, onClose, onStatusUpdate }: JntSideba
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className={`block text-xs font-medium ${tc.textMuted} mb-1.5 uppercase tracking-wide`}>
                   Weight (kg)
                 </label>
                 <input
@@ -390,14 +398,14 @@ export default function JntSidebar({ order, onClose, onStatusUpdate }: JntSideba
                   min="0.1"
                   value={packageWeight}
                   onChange={(e) => setPackageWeight(parseFloat(e.target.value) || 0.5)}
-                  className="w-full p-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white text-gray-900"
+                  className={inputClass}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className={`block text-xs font-medium ${tc.textMuted} mb-1.5 uppercase tracking-wide`}>
                   Shipping Fee
                 </label>
-                <div className="w-full p-3 border-2 border-red-200 rounded-lg bg-red-50 text-red-700 font-bold text-center">
+                <div className={`w-full px-3 py-2.5 rounded-md text-sm font-bold text-center ${redCardClass} text-red-600`}>
                   ₱{shippingFee.toFixed(2)}
                 </div>
               </div>
@@ -407,65 +415,68 @@ export default function JntSidebar({ order, onClose, onStatusUpdate }: JntSideba
 
         {/* Notes */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className={`block text-xs font-medium ${tc.textMuted} mb-1.5 uppercase tracking-wide`}>
             Delivery Notes (Optional)
           </label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            className="w-full p-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white text-gray-900"
+            className={`${inputClass} resize-none`}
             rows={2}
             placeholder="Special instructions for delivery..."
           />
         </div>
 
         {/* Shipping Summary */}
-        <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4">
-          <h5 className="font-semibold mb-3 text-red-700 text-sm uppercase tracking-wide">Shipping Summary</h5>
+        <div className={`${redCardClass} rounded-lg p-4`}>
+          <h5 className="font-semibold text-red-600 mb-3 text-xs uppercase tracking-widest">Shipping Summary</h5>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-600">Zone:</span>
-              <span className="text-gray-900 font-medium">{SHIPPING_ZONES[selectedZone].label}</span>
+              <span className={tc.textMuted}>Zone</span>
+              <span className={`font-medium ${tc.text}`}>{SHIPPING_ZONES[selectedZone].label}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">Estimated Delivery:</span>
-              <span className="text-gray-900 font-medium">{SHIPPING_ZONES[selectedZone].estimatedDays} business days</span>
+              <span className={tc.textMuted}>Est. Delivery</span>
+              <span className={`font-medium ${tc.text}`}>{SHIPPING_ZONES[selectedZone].estimatedDays} business days</span>
             </div>
-            <div className="flex justify-between font-bold pt-2 border-t border-red-200 mt-2">
-              <span className="text-gray-900">Total:</span>
-              <span className="text-red-600 text-lg">₱{shippingFee.toFixed(2)}</span>
+            <div className={`flex justify-between font-bold pt-2 mt-1 border-t ${isDark ? 'border-red-800/40' : 'border-red-200'}`}>
+              <span className={tc.text}>Total</span>
+              <span className="text-red-600 text-base">₱{shippingFee.toFixed(2)}</span>
             </div>
           </div>
         </div>
 
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-          <p className="text-gray-600 text-sm">
-            <strong className="text-gray-800">Note:</strong> Click "Ship Order" to generate waybill and notify the customer.
+        {/* Note callout */}
+        <div className={`${tc.bgSecondary} border ${tc.border} rounded-md p-3`}>
+          <p className={`text-xs ${tc.textMuted}`}>
+            <span className={`font-semibold ${tc.text}`}>Note:</span>{' '}
+            Click "Ship Order" to generate a waybill and notify the customer.
           </p>
         </div>
       </div>
 
-      <div className="flex gap-3 pt-4 border-t border-gray-200">
+      {/* Action Buttons */}
+      <div className={`flex gap-3 pt-4 border-t ${tc.border}`}>
         <button
           onClick={onClose}
-          className="flex-1 px-4 py-3 border-2 border-gray-300 hover:bg-gray-50 rounded-lg text-gray-700 font-semibold transition-colors"
           disabled={isCreatingDelivery}
+          className={`flex-1 px-4 py-2.5 border ${tc.border} rounded-md text-sm font-semibold ${tc.text} transition-colors disabled:opacity-50 ${tc.hoverBg}`}
         >
           CANCEL
         </button>
         <button
           onClick={handleCreateDelivery}
           disabled={isCreatingDelivery || !recipientName || !fullAddress}
-          className="flex-1 px-4 py-3 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg flex items-center justify-center gap-2 font-semibold transition-colors shadow-md"
+          className="flex-1 px-4 py-2.5 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-md flex items-center justify-center gap-2 text-sm font-semibold transition-colors shadow-sm"
         >
           {isCreatingDelivery ? (
             <>
-              <span className="animate-spin">⏳</span>
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               CREATING...
             </>
           ) : (
             <>
-              <Truck size={18} />
+              <Truck size={16} />
               SHIP ORDER
             </>
           )}

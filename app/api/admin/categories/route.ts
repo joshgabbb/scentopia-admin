@@ -64,15 +64,10 @@ export async function POST(request: NextRequest) {
       }, { status: 409 });
     }
 
-    // Create new category
+    // Create new category (let DB handle created_at/updated_at defaults)
     const { data: category, error } = await supabase
       .from('category')
-      .insert({
-        name: name.trim(),
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
+      .insert({ name: name.trim(), is_active: true })
       .select()
       .single();
 
@@ -109,9 +104,7 @@ export async function PUT(request: NextRequest) {
       }, { status: 400 });
     }
 
-    const updateData: { name?: string; is_active?: boolean; updated_at: string } = {
-      updated_at: new Date().toISOString()
-    };
+    const updateData: { name?: string; is_active?: boolean; updated_at?: string } = {};
 
     if (name !== undefined) {
       if (typeof name !== 'string' || name.trim().length === 0) {
@@ -156,6 +149,8 @@ export async function PUT(request: NextRequest) {
         error: 'Category not found'
       }, { status: 404 });
     }
+
+    updateData.updated_at = new Date().toISOString();
 
     // Use .select() without .single() — avoids PGRST116 when RLS filters the result
     const { data: rows, error } = await supabase
@@ -227,10 +222,7 @@ export async function DELETE(request: NextRequest) {
       // Soft delete - just deactivate the category
       const { data: rows, error } = await supabase
         .from('category')
-        .update({
-          is_active: false,
-          updated_at: new Date().toISOString()
-        })
+        .update({ is_active: false, updated_at: new Date().toISOString() })
         .eq('id', id)
         .select();
 

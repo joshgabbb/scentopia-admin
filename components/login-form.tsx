@@ -18,6 +18,15 @@ export function LoginForm({
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
 
+  const logAuthEvent = (action: "login" | "login_failed", userId = "", emailVal = email) => {
+    // Fire-and-forget — do not await, never block the UX
+    fetch("/api/admin/auth/log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, email: emailVal, userId }),
+    }).catch(() => {});
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const supabase = createClient();
@@ -35,20 +44,23 @@ export function LoginForm({
         .eq("email", email)
         .single();
 
-      console.log("checkRole:", checkRole);
-
       if (!checkRole || checkRole.account_role == "user") {
+        logAuthEvent("login_failed");
         throw new Error("Unauthorized: You do not have access to this app.");
       }
 
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data: signInData, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      console.log("Login error:", error);
+      if (error) {
+        logAuthEvent("login_failed");
+        throw error;
+      }
 
-      if (error) throw error;
+      // Log successful login (fire-and-forget)
+      logAuthEvent("login", signInData.user?.id ?? "");
       location.reload();
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred");

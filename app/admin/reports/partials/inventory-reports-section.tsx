@@ -110,9 +110,10 @@ export default function InventoryReportsSection() {
       return (
         <tr className="text-left text-[#7a6a4a] text-sm">
           <th className="py-3 px-4">Product</th>
-          <th className="py-3 px-4">Previous</th>
-          <th className="py-3 px-4">New</th>
-          <th className="py-3 px-4">Change</th>
+          <th className="py-3 px-4">Size</th>
+          <th className="py-3 px-4">Type</th>
+          <th className="py-3 px-4">Qty</th>
+          <th className="py-3 px-4">Before → After</th>
           <th className="py-3 px-4">Reason</th>
           <th className="py-3 px-4">Date</th>
         </tr>
@@ -144,17 +145,24 @@ export default function InventoryReportsSection() {
 
   const renderTableRow = (row: any, index: number) => {
     if (reportType === "movement") {
-      const changeColor = row.change > 0 ? "text-green-400" : row.change < 0 ? "text-red-400" : "text-[#7a6a4a]";
+      const isIn = row.type === 'IN';
       return (
         <tr key={index} className="border-t border-[#d4af37]/10 hover:bg-[#faf8f3]/50">
-          <td className="py-3 px-4 text-[#1c1810]">{row.productName}</td>
-          <td className="py-3 px-4 text-[#7a6a4a]">{row.previousStock}</td>
-          <td className="py-3 px-4 text-[#7a6a4a]">{row.newStock}</td>
-          <td className={`py-3 px-4 font-medium ${changeColor}`}>
-            {row.change > 0 ? `+${row.change}` : row.change}
+          <td className="py-3 px-4 text-[#1c1810] font-medium">{row.productName}</td>
+          <td className="py-3 px-4 text-[#7a6a4a] text-sm">{row.size}</td>
+          <td className="py-3 px-4">
+            <span className={`px-2 py-0.5 text-xs font-semibold rounded ${isIn ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+              {row.type}
+            </span>
+          </td>
+          <td className={`py-3 px-4 font-medium ${isIn ? 'text-green-600' : 'text-red-600'}`}>
+            {isIn ? '+' : '-'}{Math.abs(row.change)}
+          </td>
+          <td className="py-3 px-4 text-[#7a6a4a] text-sm">
+            {row.previousStock} → {row.newStock}
           </td>
           <td className="py-3 px-4 text-[#1c1810]">{row.reason}</td>
-          <td className="py-3 px-4 text-[#7a6a4a]">{row.date}</td>
+          <td className="py-3 px-4 text-[#7a6a4a] text-sm">{row.date}</td>
         </tr>
       );
     }
@@ -285,13 +293,13 @@ export default function InventoryReportsSection() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-[#7a6a4a]">
+                  <td colSpan={reportType === "movement" ? 7 : 6} className="py-8 text-center text-[#7a6a4a]">
                     Loading...
                   </td>
                 </tr>
               ) : getDataRows().length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-[#7a6a4a]">
+                  <td colSpan={reportType === "movement" ? 7 : 6} className="py-8 text-center text-[#7a6a4a]">
                     No data available
                   </td>
                 </tr>

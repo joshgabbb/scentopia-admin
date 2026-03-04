@@ -1,6 +1,6 @@
 "use client";
-import React, { useState, useEffect } from "react";
-import { ArrowUpFromLine, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { ArrowUpFromLine, CheckCircle, AlertCircle, Loader2, Search, X } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 
 interface Product {
@@ -18,27 +18,18 @@ interface Toast {
 
 const REASON_OPTIONS = ["Sale", "Damage", "Adjustment", "Expiry", "Other"];
 
-async function fetchAllProducts(): Promise<Product[]> {
-  const allProducts: Product[] = [];
-  let page = 1;
-  while (true) {
-    const res = await fetch(`/api/admin/products?page=${page}&status=active`);
-    const result = await res.json();
-    if (!result.success) break;
-    const active = (result.data.products as Product[]).filter(p => p.isActive);
-    allProducts.push(...active);
-    if (page >= result.data.totalPages) break;
-    page++;
-  }
-  return allProducts;
-}
-
 export default function StockOutPage() {
   const { themeClasses } = useTheme();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loadingProducts, setLoadingProducts] = useState(true);
 
-  const [selectedProductId, setSelectedProductId] = useState("");
+  // Product search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Product[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [selectedSize, setSelectedSize] = useState("");
   const [quantity, setQuantity] = useState("");
   const [reason, setReason] = useState("");
@@ -47,16 +38,58 @@ export default function StockOutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
 
-  useEffect(() => {
-    fetchAllProducts()
-      .then(setProducts)
-      .catch(() => console.error("Failed to fetch products"))
-      .finally(() => setLoadingProducts(false));
+  const searchProducts = useCallback(async (q: string) => {
+    if (!q.trim()) { setSearchResults([]); return; }
+    setIsSearching(true);
+    try {
+      const res = await fetch(`/api/admin/products?search=${encodeURIComponent(q)}&status=active&limit=10`);
+      const result = await res.json();
+      if (result.success) {
+        setSearchResults((result.data.products as Product[]).filter(p => p.isActive));
+      }
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
   }, []);
 
-  const selectedProduct = products.find(p => p.id === selectedProductId);
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const q = e.target.value;
+    setSearchQuery(q);
+    setShowDropdown(true);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => searchProducts(q), 300);
+  };
+
+  const handleSelectProduct = (product: Product) => {
+    setSelectedProduct(product);
+    setSearchQuery(product.name);
+    setShowDropdown(false);
+    setSelectedSize("");
+    setQuantity("");
+  };
+
+  const handleClearProduct = () => {
+    setSelectedProduct(null);
+    setSearchQuery("");
+    setSearchResults([]);
+    setSelectedSize("");
+    setQuantity("");
+  };
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
   const currentSizeStock = selectedProduct && selectedSize
-    ? (selectedProduct.stocks[selectedSize] ?? 0)
+    ? (selectedProduct.stocks?.[selectedSize] ?? 0)
     : null;
 
   const showToast = (type: "success" | "error", message: string) => {
@@ -65,9 +98,7 @@ export default function StockOutPage() {
   };
 
   const handleReset = () => {
-    setSelectedProductId("");
-    setSelectedSize("");
-    setQuantity("");
+    handleClearProduct();
     setReason("");
     setRemarks("");
   };
@@ -75,7 +106,7 @@ export default function StockOutPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const qty = parseInt(quantity);
-    if (!selectedProductId || !selectedSize || !qty || qty <= 0 || !reason) return;
+    if (!selectedProduct || !selectedSize || !qty || qty <= 0 || !reason) return;
 
     setIsSubmitting(true);
     try {
@@ -83,7 +114,7 @@ export default function StockOutPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          productId: selectedProductId,
+          productId: selectedProduct.id,
           size: selectedSize,
           quantity: qty,
           reason,
@@ -94,17 +125,11 @@ export default function StockOutPage() {
       const result = await res.json();
 
       if (result.success) {
-        setProducts(prev =>
-          prev.map(p =>
-            p.id !== selectedProductId
-              ? p
-              : { ...p, stocks: { ...p.stocks, [selectedSize]: result.newStock } }
-          )
+        setSelectedProduct(prev => prev
+          ? { ...prev, stocks: { ...prev.stocks, [selectedSize]: result.newStock } }
+          : prev
         );
-        showToast(
-          "success",
-          `Removed ${qty} unit${qty !== 1 ? "s" : ""} from ${selectedSize}. New stock: ${result.newStock}.`
-        );
+        showToast("success", `Removed ${qty} unit${qty !== 1 ? "s" : ""} from ${selectedSize}. New stock: ${result.newStock}.`);
         setQuantity("");
         setRemarks("");
         setSelectedSize("");
@@ -121,23 +146,18 @@ export default function StockOutPage() {
 
   const qtyNum = parseInt(quantity) || 0;
   const insufficientStock = currentSizeStock !== null && qtyNum > 0 && qtyNum > currentSizeStock;
-  const isFormValid = !!(selectedProductId && selectedSize && qtyNum > 0 && reason && !insufficientStock);
+  const isFormValid = !!(selectedProduct && selectedSize && qtyNum > 0 && reason && !insufficientStock);
 
   return (
     <div className="max-w-lg space-y-6">
       {/* Toast */}
       {toast && (
-        <div
-          className={`fixed top-6 right-6 z-50 flex items-start gap-3 p-4 rounded-lg shadow-lg border max-w-sm ${
-            toast.type === "success"
-              ? "bg-green-50 border-green-200 text-green-800"
-              : "bg-red-50 border-red-200 text-red-800"
-          }`}
-        >
+        <div className={`fixed top-6 right-6 z-50 flex items-start gap-3 p-4 rounded-lg shadow-lg border max-w-sm ${
+          toast.type === "success" ? "bg-green-50 border-green-200 text-green-800" : "bg-red-50 border-red-200 text-red-800"
+        }`}>
           {toast.type === "success"
             ? <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-green-600" />
-            : <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-500" />
-          }
+            : <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-500" />}
           <p className="text-sm font-medium">{toast.message}</p>
         </div>
       )}
@@ -155,25 +175,54 @@ export default function StockOutPage() {
 
       <form onSubmit={handleSubmit} className="bg-white border border-[#e8e0d0] rounded-lg p-6 space-y-5">
 
-        {/* Product */}
+        {/* Product — Searchable Autocomplete */}
         <div>
           <label className="block text-sm font-medium text-[#d4af37] mb-2 uppercase tracking-wide">Product</label>
-          {loadingProducts ? (
-            <div className="flex items-center gap-2 text-[#7a6a4a] text-sm">
-              <Loader2 className="w-4 h-4 animate-spin" /> Loading products...
+          <div ref={searchRef} className="relative">
+            <div className="relative flex items-center">
+              <Search className="absolute left-3 w-4 h-4 text-[#7a6a4a] pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={handleSearchChange}
+                onFocus={() => searchQuery && setShowDropdown(true)}
+                placeholder="Search product name..."
+                className="w-full pl-9 pr-9 py-3 bg-[#faf8f3] border border-[#e8e0d0] rounded-lg text-[#1c1810] placeholder-[#b0a080] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+              />
+              {(searchQuery || isSearching) && (
+                <button type="button" onClick={handleClearProduct} className="absolute right-3 text-[#7a6a4a] hover:text-[#1c1810]">
+                  {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                </button>
+              )}
             </div>
-          ) : (
-            <select
-              value={selectedProductId}
-              onChange={e => { setSelectedProductId(e.target.value); setSelectedSize(""); setQuantity(""); }}
-              className="w-full p-3 bg-[#faf8f3] border border-[#e8e0d0] rounded-lg text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
-              required
-            >
-              <option value="">Select a product...</option>
-              {products.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+
+            {showDropdown && searchResults.length > 0 && (
+              <div className="absolute z-20 w-full mt-1 bg-white border border-[#e8e0d0] rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                {searchResults.map(p => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => handleSelectProduct(p)}
+                    className="w-full text-left px-4 py-2.5 hover:bg-[#faf8f3] text-[#1c1810] text-sm border-b border-[#e8e0d0] last:border-0"
+                  >
+                    <span className="font-medium">{p.name}</span>
+                    <span className="text-[#7a6a4a] ml-2 text-xs">
+                      {Object.entries(p.stocks ?? {}).map(([s, q]) => `${s}: ${q}`).join(' · ')}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {showDropdown && !isSearching && searchQuery && searchResults.length === 0 && (
+              <div className="absolute z-20 w-full mt-1 bg-white border border-[#e8e0d0] rounded-lg shadow-lg px-4 py-3 text-sm text-[#7a6a4a]">
+                No products found for &quot;{searchQuery}&quot;
+              </div>
+            )}
+          </div>
+          {selectedProduct && (
+            <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1 mt-2">
+              Selected: <span className="font-semibold">{selectedProduct.name}</span>
+            </p>
           )}
         </div>
 
@@ -188,8 +237,8 @@ export default function StockOutPage() {
             disabled={!selectedProduct}
           >
             <option value="">Select a size...</option>
-            {selectedProduct && Object.entries(selectedProduct.sizes).map(([size]) => {
-              const stock = selectedProduct.stocks[size] ?? 0;
+            {selectedProduct && Object.entries(selectedProduct.sizes ?? {}).map(([size]) => {
+              const stock = selectedProduct.stocks?.[size] ?? 0;
               return (
                 <option key={size} value={size} disabled={stock === 0}>
                   {size} — {stock} units{stock === 0 ? " (out of stock)" : ""}
@@ -199,7 +248,7 @@ export default function StockOutPage() {
           </select>
           {currentSizeStock !== null && (
             <p className="text-xs text-[#7a6a4a] mt-1.5">
-              Current: <span className="font-semibold text-[#1c1810]">{currentSizeStock} units</span>
+              Current stock: <span className="font-semibold text-[#1c1810]">{currentSizeStock} units</span>
             </p>
           )}
         </div>
@@ -226,8 +275,8 @@ export default function StockOutPage() {
             </p>
           )}
           {!insufficientStock && selectedSize && currentSizeStock !== null && qtyNum > 0 && (
-            <p className="text-xs text-[#7a6a4a] mt-1.5">
-              New stock will be: <span className="font-semibold text-[#1c1810]">{currentSizeStock - qtyNum}</span> units
+            <p className="text-xs text-orange-600 mt-1.5 font-medium">
+              Remaining stock will be: <span className="font-semibold">{currentSizeStock - qtyNum}</span> units
             </p>
           )}
         </div>

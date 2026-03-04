@@ -1,12 +1,13 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { logStockOut } from "@/lib/audit-logger";
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
+  const authClient = await createClient();
 
   try {
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const supabase = createAdminClient();
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
