@@ -16,7 +16,8 @@ export async function GET(request: NextRequest) {
     const typeFilter = searchParams.get("type") || "all";
     const dateFrom = searchParams.get("dateFrom") || "";
     const dateTo = searchParams.get("dateTo") || "";
-    const limit = 25;
+    const limitParam = parseInt(searchParams.get("limit") || "25");
+    const limit = [25, 50, 100].includes(limitParam) ? limitParam : 25;
     const offset = (page - 1) * limit;
 
     let query = supabase

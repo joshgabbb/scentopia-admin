@@ -50,21 +50,20 @@ const formatDate = (dateString: string) => {
   });
 };
 
-// BLACK & GOLD status colors
 const getStatusColor = (isActive: boolean) => {
-  return isActive 
-    ? 'bg-green-900/20 text-green-400 border border-green-400/30' 
-    : 'bg-red-900/20 text-red-400 border border-red-400/30';
+  return isActive
+    ? 'bg-green-100 text-green-800 border border-green-300'
+    : 'bg-red-100 text-red-700 border border-red-300';
 };
 
 const getPerfumeTypeColor = (type: string) => {
   switch (type) {
     case 'Premium':
-      return 'bg-purple-900/20 text-purple-400 border border-purple-400/30';
+      return 'bg-purple-100 text-purple-800 border border-purple-300';
     case 'Basic':
-      return 'bg-blue-900/20 text-blue-400 border border-blue-400/30';
+      return 'bg-blue-100 text-blue-800 border border-blue-300';
     default:
-      return 'bg-[#d4af37]/10 text-[#7a6a4a] border border-[#d4af37]/30';
+      return 'bg-[#d4af37]/15 text-[#8B6914] border border-[#d4af37]/50';
   }
 };
 
@@ -371,7 +370,7 @@ export default function ProductDetails({ product, isLoading, onBack }: ProductDe
                         </div>
                         <div className="text-right">
                           <p className="font-medium text-lg text-[#d4af37]">{formatCurrency(price)}</p>
-                          <p className={`text-sm ${stock > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          <p className={`text-sm ${stock > 0 ? 'text-green-700' : 'text-red-600'}`}>
                             {stock} in stock
                           </p>
                         </div>
@@ -391,7 +390,7 @@ export default function ProductDetails({ product, isLoading, onBack }: ProductDe
                       <h4 className="text-sm font-medium text-[#1c1810] mb-2">Occasion Tags</h4>
                       <div className="flex flex-wrap gap-2">
                         {currentProduct.occasionsTags.map((tag, index) => (
-                          <span key={index} className="inline-flex px-2 py-1 text-xs bg-green-900/20 text-green-400 border border-green-400/30 rounded-full">
+                          <span key={index} className="inline-flex px-2 py-1 text-xs bg-green-100 text-green-800 border border-green-300 rounded-full">
                             {tag}
                           </span>
                         ))}
@@ -404,7 +403,7 @@ export default function ProductDetails({ product, isLoading, onBack }: ProductDe
                       <h4 className="text-sm font-medium text-[#1c1810] mb-2">Weather Tags</h4>
                       <div className="flex flex-wrap gap-2">
                         {currentProduct.weatherTags.map((tag, index) => (
-                          <span key={index} className="inline-flex px-2 py-1 text-xs bg-yellow-900/20 text-yellow-400 border border-yellow-400/30 rounded-full">
+                          <span key={index} className="inline-flex px-2 py-1 text-xs bg-amber-100 text-amber-800 border border-amber-300 rounded-full">
                             {tag}
                           </span>
                         ))}
@@ -417,7 +416,7 @@ export default function ProductDetails({ product, isLoading, onBack }: ProductDe
                       <h4 className="text-sm font-medium text-[#1c1810] mb-2">Top Notes</h4>
                       <div className="flex flex-wrap gap-2">
                         {currentProduct.topNotesTags.map((tag, index) => (
-                          <span key={index} className="inline-flex px-2 py-1 text-xs bg-purple-900/20 text-purple-400 border border-purple-400/30 rounded-full">
+                          <span key={index} className="inline-flex px-2 py-1 text-xs bg-purple-100 text-purple-800 border border-purple-300 rounded-full">
                             {tag}
                           </span>
                         ))}
@@ -430,7 +429,7 @@ export default function ProductDetails({ product, isLoading, onBack }: ProductDe
                       <h4 className="text-sm font-medium text-[#1c1810] mb-2">Other Options</h4>
                       <div className="flex flex-wrap gap-2">
                         {currentProduct.otherOptionsTags.map((tag, index) => (
-                          <span key={index} className="inline-flex px-2 py-1 text-xs bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/30 rounded-full">
+                          <span key={index} className="inline-flex px-2 py-1 text-xs bg-[#d4af37]/15 text-[#8B6914] border border-[#d4af37]/50 rounded-full">
                             {tag}
                           </span>
                         ))}
@@ -507,7 +506,7 @@ export default function ProductDetails({ product, isLoading, onBack }: ProductDe
                   {Object.entries(currentProduct.stocks).map(([size, stock]) => (
                     <div key={size} className="flex justify-between items-center">
                       <span className="text-sm font-medium text-[#1c1810]">{size}ml</span>
-                      <span className={`text-sm font-semibold ${stock > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      <span className={`text-sm font-semibold ${stock > 0 ? 'text-green-700' : 'text-red-600'}`}>
                         {stock} units
                       </span>
                     </div>

@@ -3,7 +3,7 @@
 // app/admin/orders/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Search,
@@ -147,7 +147,7 @@ const getSortFieldMapping = (field: string): string => {
   }
 };
 
-export default function OrdersPage() {
+function OrdersContent() {
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(true);
   const [data, setData] = useState<OrdersData | null>(null);
@@ -599,7 +599,7 @@ const executeExport = () => {
   const displayOrders = data ? sortOrdersClientSide(data.orders) : [];
 
   return (
-    <div className="space-y-6 bg-white min-h-screen">
+    <div className="space-y-6 bg-white dark:bg-[#100f0c] min-h-screen">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
@@ -840,7 +840,7 @@ const executeExport = () => {
 
         {/* Date Range Inputs (only show when daterange is selected) */}
         {exportOptions.exportType === 'daterange' && (
-          <div className="space-y-3 p-3 bg-white border border-[#d4af37]/10 rounded">
+          <div className="space-y-3 p-3 bg-white dark:bg-[#26231a] border border-[#d4af37]/10 rounded">
             <div>
               <label className="block text-sm font-medium text-[#7a6a4a] mb-2">From Date</label>
               <input
@@ -901,7 +901,7 @@ const executeExport = () => {
                 <select
                   value={tempFilters.status}
                   onChange={(e) => setTempFilters({ ...tempFilters, status: e.target.value })}
-                  className="w-full px-3 py-2 border border-[#e8e0d0] bg-white text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                  className="w-full px-3 py-2 border border-[#e8e0d0] dark:border-[#2e2a1e] bg-white dark:bg-[#26231a] text-[#1c1810] dark:text-[#f0e8d8] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                 >
                   <option value="all">All Statuses</option>
                   <option value="Pending">Pending</option>
@@ -917,7 +917,7 @@ const executeExport = () => {
                 <select
                   value={tempFilters.paymentStatus}
                   onChange={(e) => setTempFilters({ ...tempFilters, paymentStatus: e.target.value })}
-                  className="w-full px-3 py-2 border border-[#e8e0d0] bg-white text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                  className="w-full px-3 py-2 border border-[#e8e0d0] dark:border-[#2e2a1e] bg-white dark:bg-[#26231a] text-[#1c1810] dark:text-[#f0e8d8] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                 >
                   <option value="all">All Payment Statuses</option>
                   <option value="paid">Paid</option>
@@ -1028,7 +1028,7 @@ const executeExport = () => {
                 <select
                   value={bulkAction.updateStatus}
                   onChange={(e) => setBulkAction({ ...bulkAction, updateStatus: e.target.value })}
-                  className="w-full px-3 py-2 border border-[#e8e0d0] bg-white text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                  className="w-full px-3 py-2 border border-[#e8e0d0] dark:border-[#2e2a1e] bg-white dark:bg-[#26231a] text-[#1c1810] dark:text-[#f0e8d8] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                 >
                   <option value="">Don't change</option>
                   <option value="Pending">Pending</option>
@@ -1044,7 +1044,7 @@ const executeExport = () => {
                 <select
                   value={bulkAction.updatePaymentStatus}
                   onChange={(e) => setBulkAction({ ...bulkAction, updatePaymentStatus: e.target.value })}
-                  className="w-full px-3 py-2 border border-[#e8e0d0] bg-white text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                  className="w-full px-3 py-2 border border-[#e8e0d0] dark:border-[#2e2a1e] bg-white dark:bg-[#26231a] text-[#1c1810] dark:text-[#f0e8d8] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                 >
                   <option value="">Don't change</option>
                   <option value="paid">Paid</option>
@@ -1087,7 +1087,7 @@ const executeExport = () => {
                   value={newOrder.customerEmail}
                   onChange={(e) => setNewOrder({ ...newOrder, customerEmail: e.target.value })}
                   placeholder="customer@example.com"
-                  className="w-full px-3 py-2 border border-[#e8e0d0] bg-white text-[#1c1810] placeholder-[#b0a080] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                  className="w-full px-3 py-2 border border-[#e8e0d0] dark:border-[#2e2a1e] bg-white dark:bg-[#26231a] text-[#1c1810] dark:text-[#f0e8d8] placeholder-[#b0a080] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                 />
               </div>
 
@@ -1098,7 +1098,7 @@ const executeExport = () => {
                   value={newOrder.customerName}
                   onChange={(e) => setNewOrder({ ...newOrder, customerName: e.target.value })}
                   placeholder="John Doe"
-                  className="w-full px-3 py-2 border border-[#e8e0d0] bg-white text-[#1c1810] placeholder-[#b0a080] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                  className="w-full px-3 py-2 border border-[#e8e0d0] dark:border-[#2e2a1e] bg-white dark:bg-[#26231a] text-[#1c1810] dark:text-[#f0e8d8] placeholder-[#b0a080] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                 />
               </div>
 
@@ -1109,7 +1109,7 @@ const executeExport = () => {
                   value={newOrder.amount}
                   onChange={(e) => setNewOrder({ ...newOrder, amount: e.target.value })}
                   placeholder="1000"
-                  className="w-full px-3 py-2 border border-[#e8e0d0] bg-white text-[#1c1810] placeholder-[#b0a080] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                  className="w-full px-3 py-2 border border-[#e8e0d0] dark:border-[#2e2a1e] bg-white dark:bg-[#26231a] text-[#1c1810] dark:text-[#f0e8d8] placeholder-[#b0a080] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                 />
               </div>
 
@@ -1118,7 +1118,7 @@ const executeExport = () => {
                 <select
                   value={newOrder.status}
                   onChange={(e) => setNewOrder({ ...newOrder, status: e.target.value })}
-                  className="w-full px-3 py-2 border border-[#e8e0d0] bg-white text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                  className="w-full px-3 py-2 border border-[#e8e0d0] dark:border-[#2e2a1e] bg-white dark:bg-[#26231a] text-[#1c1810] dark:text-[#f0e8d8] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                 >
                   <option value="Pending">Pending</option>
                   <option value="Processing">Processing</option>
@@ -1132,7 +1132,7 @@ const executeExport = () => {
                 <select
                   value={newOrder.paymentMethod}
                   onChange={(e) => setNewOrder({ ...newOrder, paymentMethod: e.target.value })}
-                  className="w-full px-3 py-2 border border-[#e8e0d0] bg-white text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                  className="w-full px-3 py-2 border border-[#e8e0d0] dark:border-[#2e2a1e] bg-white dark:bg-[#26231a] text-[#1c1810] dark:text-[#f0e8d8] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                 >
                   <option value="gcash">GCash</option>
                   <option value="paymaya">PayMaya</option>
@@ -1191,7 +1191,7 @@ const executeExport = () => {
 
         <div className="overflow-x-auto max-h-[calc(100vh-380px)] overflow-y-auto">
           <table className="w-full">
-            <thead className="bg-white border-b border-[#e8e0d0] sticky top-0 z-10">
+            <thead className="bg-white dark:bg-[#26231a] border-b border-[#e8e0d0] dark:border-[#2e2a1e] sticky top-0 z-10">
               <tr>
                 <th className="px-6 py-3 text-left">
                   <input
@@ -1393,5 +1393,13 @@ const executeExport = () => {
         )}
       </div>
     </div>
+  );
+}
+
+export default function OrdersPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center"><div className="text-[#d4af37]">Loading...</div></div>}>
+      <OrdersContent />
+    </Suspense>
   );
 }

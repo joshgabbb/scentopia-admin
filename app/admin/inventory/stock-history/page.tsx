@@ -2,9 +2,10 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   ClipboardList, Filter, ChevronLeft, ChevronRight,
-  Loader2, Package, RefreshCw, Download, X,
+  Loader2, Package, RefreshCw, Download, FileText, FileSpreadsheet, X,
 } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
+import { exportReport, type ExportConfig } from "@/lib/export-utils";
 
 interface StockMovement {
   id: string;
@@ -129,6 +130,14 @@ export default function StockHistoryPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
+  const [perPage, setPerPage] = useState(25);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportOptions, setExportOptions] = useState({
+    dateFrom: '',
+    dateTo: '',
+    exportType: 'all',
+    format: 'csv' as 'csv' | 'pdf',
+  });
 
   const [products, setProducts] = useState<Product[]>([]);
   const [filterProduct, setFilterProduct] = useState("");
@@ -146,7 +155,7 @@ export default function StockHistoryPage() {
   const fetchMovements = useCallback(async (page = 1) => {
     setIsLoading(true);
     try {
-      const params = new URLSearchParams({ page: String(page) });
+      const params = new URLSearchParams({ page: String(page), limit: String(perPage) });
       if (filterProduct) params.set("productId", filterProduct);
       if (filterType !== "all") params.set("type", filterType);
       if (filterDateFrom) params.set("dateFrom", filterDateFrom);
@@ -166,7 +175,7 @@ export default function StockHistoryPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [filterProduct, filterType, filterDateFrom, filterDateTo]);
+  }, [filterProduct, filterType, filterDateFrom, filterDateTo, perPage]);
 
   // Auto-fetch when type filter changes; skip first render
   useEffect(() => {
@@ -195,20 +204,31 @@ export default function StockHistoryPage() {
     setActivePreset(preset.label);
   };
 
-  const handleExportCurrentPage = () => {
-    if (movements.length === 0) return;
-    exportToCSV(movements);
-  };
+  const executeExport = async () => {
+    if (exportOptions.exportType === 'thispage') {
+      if (movements.length === 0) return;
+      exportReport(buildConfig(movements), exportOptions.format);
+      closeExportModal();
+      return;
+    }
 
-  const handleExportAll = async () => {
     setIsExporting(true);
     try {
-      // Fetch all pages with current filters
       const params = new URLSearchParams();
-      if (filterProduct) params.set("productId", filterProduct);
-      if (filterType !== "all") params.set("type", filterType);
-      if (filterDateFrom) params.set("dateFrom", filterDateFrom);
-      if (filterDateTo) params.set("dateTo", filterDateTo);
+      if (exportOptions.exportType === 'daterange') {
+        if (!exportOptions.dateFrom || !exportOptions.dateTo) {
+          alert('Please select both start and end dates');
+          return;
+        }
+        params.set("dateFrom", exportOptions.dateFrom);
+        params.set("dateTo", exportOptions.dateTo);
+      } else {
+        // 'all' — respect active page filters
+        if (filterProduct) params.set("productId", filterProduct);
+        if (filterType !== "all") params.set("type", filterType);
+        if (filterDateFrom) params.set("dateFrom", filterDateFrom);
+        if (filterDateTo) params.set("dateTo", filterDateTo);
+      }
 
       const allMovements: StockMovement[] = [];
       let page = 1;
@@ -221,7 +241,14 @@ export default function StockHistoryPage() {
         if (page >= result.data.totalPages) break;
         page++;
       }
-      exportToCSV(allMovements);
+
+      if (allMovements.length === 0) {
+        alert('No stock history found to export');
+        return;
+      }
+
+      exportReport(buildConfig(allMovements), exportOptions.format);
+      closeExportModal();
     } catch {
       console.error("Export failed");
     } finally {
@@ -229,10 +256,50 @@ export default function StockHistoryPage() {
     }
   };
 
+  function buildConfig(data: StockMovement[]): ExportConfig {
+    const dr = exportOptions.exportType === 'daterange' && exportOptions.dateFrom && exportOptions.dateTo
+      ? { from: exportOptions.dateFrom, to: exportOptions.dateTo }
+      : filterDateFrom && filterDateTo
+        ? { from: filterDateFrom, to: filterDateTo }
+        : undefined;
+    const inCount = data.filter(m => m.type === "IN").length;
+    const outCount = data.filter(m => m.type === "OUT").length;
+    return {
+      title: "Stock History",
+      subtitle: "Stock movement records",
+      filename: "stock_history",
+      headers: ["Date/Time", "Product", "Size", "Type", "Qty", "Prev Stock", "New Stock", "Reason", "Remarks", "By"],
+      rows: data.map(m => [
+        formatDateTime(m.createdAt),
+        m.productName,
+        m.size,
+        m.type,
+        m.quantity,
+        m.previousStock,
+        m.newStock,
+        m.reason || "—",
+        m.remarks || "—",
+        m.createdByName || "—",
+      ]),
+      dateRange: dr,
+      additionalInfo: [
+        { label: "Total Movements", value: data.length.toString() },
+        { label: "Stock In", value: inCount.toString() },
+        { label: "Stock Out", value: outCount.toString() },
+      ],
+    };
+  }
+
+  const closeExportModal = () => {
+    setShowExportModal(false);
+    setExportOptions({ dateFrom: '', dateTo: '', exportType: 'all', format: 'csv' });
+  };
+
   const pageNumbers = getPageNumbers(currentPage, totalPages);
   const hasActiveFilters = filterProduct || filterType !== "all" || filterDateFrom || filterDateTo;
 
   return (
+    <>
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -249,34 +316,13 @@ export default function StockHistoryPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="relative group">
-            <button
-              disabled={movements.length === 0 || isExporting}
-              className={`flex items-center gap-2 px-3 py-2 border ${themeClasses.border} ${themeClasses.text} ${themeClasses.hoverBg} rounded-lg text-sm transition-colors disabled:opacity-40`}
-            >
-              {isExporting
-                ? <Loader2 className="w-4 h-4 animate-spin" />
-                : <Download className="w-4 h-4" />
-              }
-              Export CSV
-            </button>
-            {/* Dropdown */}
-            <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-[#e8e0d0] rounded-lg shadow-lg z-20 hidden group-hover:block">
-              <button
-                onClick={handleExportCurrentPage}
-                className="w-full text-left px-4 py-2.5 text-sm text-[#1c1810] hover:bg-[#faf8f3] transition-colors"
-              >
-                Export this page
-              </button>
-              <button
-                onClick={handleExportAll}
-                disabled={isExporting}
-                className="w-full text-left px-4 py-2.5 text-sm text-[#1c1810] hover:bg-[#faf8f3] transition-colors disabled:opacity-50 border-t border-[#e8e0d0]"
-              >
-                {isExporting ? "Exporting..." : "Export all results"}
-              </button>
-            </div>
-          </div>
+          <button
+            onClick={() => setShowExportModal(true)}
+            className="px-4 py-2 border border-[#e8e0d0] text-[#1c1810] hover:bg-[#d4af37]/10 transition-colors flex items-center space-x-2"
+          >
+            <Download className="w-4 h-4" />
+            <span>Export</span>
+          </button>
 
           <button
             onClick={() => fetchMovements(currentPage)}
@@ -467,11 +513,30 @@ export default function StockHistoryPage() {
       </div>
 
       {/* Pagination */}
-      {!isLoading && totalPages > 1 && (
+      {!isLoading && movements.length > 0 && (
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          <p className="text-sm text-[#7a6a4a]">
-            Page {currentPage} of {totalPages} · {totalCount} records
-          </p>
+          {/* Left: record info + per-page selector */}
+          <div className="flex items-center gap-3">
+            <p className="text-sm text-[#7a6a4a]">
+              {totalCount === 0
+                ? "No records"
+                : `${((currentPage - 1) * perPage) + 1}–${Math.min(currentPage * perPage, totalCount)} of ${totalCount} records`}
+            </p>
+            <select
+              value={perPage}
+              onChange={e => {
+                setPerPage(Number(e.target.value));
+                fetchMovements(1);
+              }}
+              className="px-2 py-1 text-xs border border-[#e8e0d0] rounded-lg bg-[#faf8f3] text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+            >
+              <option value={25}>25 / page</option>
+              <option value={50}>50 / page</option>
+              <option value={100}>100 / page</option>
+            </select>
+          </div>
+
+          {/* Right: page buttons */}
           <div className="flex items-center gap-1">
             <button
               onClick={() => fetchMovements(currentPage - 1)}
@@ -508,5 +573,147 @@ export default function StockHistoryPage() {
         </div>
       )}
     </div>
+
+    {/* EXPORT MODAL */}
+    {showExportModal && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-[#faf8f3] border border-[#e8e0d0] p-6 w-full max-w-md">
+          <h2 className="text-xl font-bold text-[#d4af37] mb-4">Export Stock History</h2>
+
+          <div className="space-y-4">
+            {/* Export Format Selection */}
+            <div>
+              <label className="block text-sm font-medium text-[#7a6a4a] mb-2">Export Format</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setExportOptions({ ...exportOptions, format: 'csv' })}
+                  className={`flex items-center justify-center gap-2 p-3 rounded border-2 transition-all ${
+                    exportOptions.format === 'csv'
+                      ? 'border-[#d4af37] bg-[#d4af37]/10 text-[#d4af37]'
+                      : 'border-[#e8e0d0] text-[#7a6a4a] hover:border-[#d4af37]/40'
+                  }`}
+                >
+                  <FileSpreadsheet className="w-5 h-5" />
+                  <div className="text-left">
+                    <div className="font-medium">CSV</div>
+                    <div className="text-xs opacity-70">Spreadsheet</div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExportOptions({ ...exportOptions, format: 'pdf' })}
+                  className={`flex items-center justify-center gap-2 p-3 rounded border-2 transition-all ${
+                    exportOptions.format === 'pdf'
+                      ? 'border-[#d4af37] bg-[#d4af37]/10 text-[#d4af37]'
+                      : 'border-[#e8e0d0] text-[#7a6a4a] hover:border-[#d4af37]/40'
+                  }`}
+                >
+                  <FileText className="w-5 h-5" />
+                  <div className="text-left">
+                    <div className="font-medium">PDF</div>
+                    <div className="text-xs opacity-70">Document</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Export Type Selection */}
+            <div>
+              <label className="block text-sm font-medium text-[#7a6a4a] mb-2">Export Type</label>
+              <div className="space-y-2">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="exportType"
+                    value="all"
+                    checked={exportOptions.exportType === 'all'}
+                    onChange={(e) => setExportOptions({ ...exportOptions, exportType: e.target.value })}
+                    className="w-4 h-4 accent-[#d4af37]"
+                  />
+                  <span className="text-[#1c1810]">All results ({totalCount})</span>
+                </label>
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="exportType"
+                    value="thispage"
+                    checked={exportOptions.exportType === 'thispage'}
+                    onChange={(e) => setExportOptions({ ...exportOptions, exportType: e.target.value })}
+                    className="w-4 h-4 accent-[#d4af37]"
+                  />
+                  <span className="text-[#1c1810]">This page ({movements.length})</span>
+                </label>
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="exportType"
+                    value="daterange"
+                    checked={exportOptions.exportType === 'daterange'}
+                    onChange={(e) => setExportOptions({ ...exportOptions, exportType: e.target.value })}
+                    className="w-4 h-4 accent-[#d4af37]"
+                  />
+                  <span className="text-[#1c1810]">Date range</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Date Range Inputs */}
+            {exportOptions.exportType === 'daterange' && (
+              <div className="space-y-3 p-3 bg-white dark:bg-[#26231a] border border-[#d4af37]/10 rounded">
+                <div>
+                  <label className="block text-sm font-medium text-[#7a6a4a] mb-2">From Date</label>
+                  <input
+                    type="date"
+                    value={exportOptions.dateFrom}
+                    onChange={(e) => setExportOptions({ ...exportOptions, dateFrom: e.target.value })}
+                    className="w-full px-3 py-2 border border-[#e8e0d0] bg-[#faf8f3] text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#7a6a4a] mb-2">To Date</label>
+                  <input
+                    type="date"
+                    value={exportOptions.dateTo}
+                    onChange={(e) => setExportOptions({ ...exportOptions, dateTo: e.target.value })}
+                    className="w-full px-3 py-2 border border-[#e8e0d0] bg-[#faf8f3] text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Export Info */}
+            <div className="bg-[#d4af37]/10 border border-[#e8e0d0] p-3 rounded">
+              <p className="text-xs text-[#7a6a4a]">
+                📄 Export will include: Date/Time, Product, Size, Type, Qty, Prev Stock, New Stock, Reason, Remarks, and By
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end space-x-3 mt-6">
+            <button
+              onClick={closeExportModal}
+              className="px-4 py-2 border border-[#e8e0d0] text-[#1c1810] hover:bg-[#d4af37]/10 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={executeExport}
+              disabled={isExporting}
+              className="px-4 py-2 bg-[#d4af37] text-[#0a0a0a] hover:bg-[#d4af37]/90 transition-colors flex items-center space-x-2 disabled:opacity-50"
+            >
+              {isExporting
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : exportOptions.format === 'pdf'
+                  ? <FileText className="w-4 h-4" />
+                  : <FileSpreadsheet className="w-4 h-4" />
+              }
+              <span>{isExporting ? 'Exporting…' : `Export ${exportOptions.format.toUpperCase()}`}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

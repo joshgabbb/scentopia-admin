@@ -185,7 +185,7 @@ const OrderActionsDropdown = ({
           <button
             onClick={handleProcessOrder}
             disabled={isUpdating}
-            className="w-full text-left px-4 py-2 text-sm text-[#1c1810] hover:bg-[#d4af37]/10 flex items-center gap-2 disabled:opacity-50 transition-colors"
+            className="w-full text-left px-4 py-2 text-sm text-[#1c1810] dark:text-[#f0e8d8] hover:bg-[#d4af37]/10 flex items-center gap-2 disabled:opacity-50 transition-colors"
           >
             <Package size={16} />
             {isUpdating ? 'Processing...' : 'Process Order'}
@@ -203,7 +203,7 @@ const OrderActionsDropdown = ({
                 setIsOpen(false);
                 onOpenJntSidebar();
               }}
-              className="w-full text-left px-4 py-2 text-sm text-[#1c1810] hover:bg-red-500/10 flex items-center gap-2 transition-colors"
+              className="w-full text-left px-4 py-2 text-sm text-[#1c1810] dark:text-[#f0e8d8] hover:bg-red-500/10 flex items-center gap-2 transition-colors"
             >
               <Truck size={16} className="text-red-500" />
               <span>J&T Express</span>
@@ -230,7 +230,7 @@ const OrderActionsDropdown = ({
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-48 bg-[#faf8f3] border border-[#e8e0d0] rounded-lg shadow-lg z-50">
+        <div className="absolute right-0 mt-2 w-48 bg-[#faf8f3] dark:bg-[#1c1a14] border border-[#e8e0d0] dark:border-[#2e2a1e] rounded-lg shadow-lg z-50">
           <div className="py-1">
             {renderDropdownItems()}
           </div>
@@ -262,7 +262,7 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
 
   if (isLoading) {
     return (
-      <div className="bg-white min-h-screen">
+      <div className="bg-white dark:bg-[#100f0c] min-h-screen">
         <div className="max-w-7xl mx-auto p-6 space-y-6">
           <div className="flex items-center gap-4">
             <Skeleton className="w-20 h-8" />
@@ -301,8 +301,8 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
 
   if (!currentOrder) {
     return (
-      <div className="p-6 bg-white min-h-screen">
-        <button 
+      <div className="p-6 bg-white dark:bg-[#100f0c] min-h-screen">
+        <button
           onClick={onBack}
           className="flex items-center gap-2 text-[#7a6a4a] hover:text-[#d4af37] mb-6 transition-colors"
         >
@@ -318,7 +318,7 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
 
   return (
     <>
-      <div className="bg-white min-h-screen">
+      <div className="bg-white dark:bg-[#100f0c] min-h-screen">
         <div className="max-w-7xl mx-auto p-6 space-y-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -387,7 +387,7 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
                     </div>
                   ))}
                 </div>
-                <div className="p-6 border-t border-[#e8e0d0] bg-white">
+                <div className="p-6 border-t border-[#e8e0d0] bg-white dark:bg-[#1c1a14]">
                   <div className="flex justify-between items-center font-semibold text-lg">
                     <span className="text-[#1c1810]">Total</span>
                     <span className="text-[#d4af37]">{formatCurrency(currentOrder.amount)}</span>
@@ -463,7 +463,7 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
                   <textarea
                     value={internalNote}
                     onChange={(e) => setInternalNote(e.target.value)}
-                    className="w-full p-3 border border-[#e8e0d0] bg-white text-[#1c1810] placeholder-[#b8a070] rounded-lg focus:ring-2 focus:ring-[#d4af37] focus:border-transparent"
+                    className="w-full p-3 border border-[#e8e0d0] dark:border-[#2e2a1e] bg-white dark:bg-[#26231a] text-[#1c1810] dark:text-[#f0e8d8] placeholder-[#b8a070] rounded-lg focus:ring-2 focus:ring-[#d4af37] focus:border-transparent"
                     rows={4}
                     placeholder="Add internal notes about this order..."
                   />

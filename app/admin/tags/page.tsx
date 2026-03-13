@@ -14,6 +14,7 @@ import {
   Loader2,
   AlertCircle,
   Filter,
+  Eye,
 } from "lucide-react";
 
 type TagType = 'occasion' | 'weather' | 'top_notes' | 'other';
@@ -25,6 +26,14 @@ interface TagItem {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  productCount: number;
+}
+
+interface TagProduct {
+  id: string;
+  name: string;
+  category: string;
+  isActive: boolean;
 }
 
 const TAG_TYPE_LABELS: Record<TagType, string> = {
@@ -52,6 +61,9 @@ const TagRowSkeleton = () => (
     </td>
     <td className="px-6 py-4">
       <Skeleton className="h-6 w-20" />
+    </td>
+    <td className="px-6 py-4">
+      <Skeleton className="h-6 w-10" />
     </td>
     <td className="px-6 py-4">
       <Skeleton className="h-6 w-16" />
@@ -92,6 +104,12 @@ export default function TagsPage() {
   const [formType, setFormType] = useState<TagType>('occasion');
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // View products modal state
+  const [isViewProductsOpen, setIsViewProductsOpen] = useState(false);
+  const [viewProductsList, setViewProductsList] = useState<TagProduct[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+  const [viewProductsTag, setViewProductsTag] = useState<TagItem | null>(null);
 
   const fetchTags = async () => {
     try {
@@ -261,6 +279,22 @@ export default function TagsPage() {
     setIsDeleteModalOpen(true);
   };
 
+  const handleViewProducts = async (tag: TagItem) => {
+    setViewProductsTag(tag);
+    setIsViewProductsOpen(true);
+    setIsLoadingProducts(true);
+    setViewProductsList([]);
+    try {
+      const res = await fetch(`/api/admin/tags/products?id=${encodeURIComponent(tag.id)}`);
+      const result = await res.json();
+      if (result.success) setViewProductsList(result.data);
+    } catch (err) {
+      console.error("Failed to fetch products for tag:", err);
+    } finally {
+      setIsLoadingProducts(false);
+    }
+  };
+
   const filteredTags = tags.filter((tag) =>
     tag.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -362,6 +396,33 @@ export default function TagsPage() {
           </div>
         </div>
 
+        {/* Tag Type Summary Cards */}
+        {!isLoading && filteredTags.length > 0 && typeFilter === 'all' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            {Object.entries(TAG_TYPE_LABELS).map(([type, label]) => {
+              const typeTags = groupedTags[type as TagType] || [];
+              const activeCount = typeTags.filter(t => t.is_active).length;
+              return (
+                <div
+                  key={type}
+                  className="bg-[#faf8f3] border border-[#e8e0d0] p-4 hover:border-[#d4af37]/40 transition-colors cursor-pointer"
+                  onClick={() => setTypeFilter(type as TagType)}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`text-xs font-semibold px-2 py-1 rounded border ${TAG_TYPE_COLORS[type as TagType]}`}>
+                      {label}
+                    </span>
+                    <span className="text-lg font-bold text-[#d4af37]">{typeTags.length}</span>
+                  </div>
+                  <p className="text-xs text-[#7a6a4a]">
+                    {activeCount} active, {typeTags.length - activeCount} inactive
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {/* Tags Table */}
         <div className="bg-[#faf8f3] border border-[#e8e0d0]">
           <div className="px-6 py-4 border-b border-[#e8e0d0]">
@@ -377,6 +438,9 @@ export default function TagsPage() {
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-[#7a6a4a] uppercase tracking-wider">
                     Type
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#7a6a4a] uppercase tracking-wider">
+                    Products Using
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-[#7a6a4a] uppercase tracking-wider">
                     Status
@@ -397,7 +461,7 @@ export default function TagsPage() {
                 ) : filteredTags.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={5}
+                      colSpan={6}
                       className="px-6 py-12 text-center text-[#7a6a4a]"
                     >
                       <Tag className="w-12 h-12 mx-auto mb-4 opacity-50" />
@@ -425,6 +489,19 @@ export default function TagsPage() {
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded border ${TAG_TYPE_COLORS[tag.type]}`}>
                           {TAG_TYPE_LABELS[tag.type]}
                         </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        {tag.productCount > 0 ? (
+                          <button
+                            onClick={() => handleViewProducts(tag)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200 rounded-full hover:bg-blue-200 transition-colors"
+                          >
+                            <Eye className="w-3 h-3" />
+                            {tag.productCount}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-[#b0a080]">0</span>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <button
@@ -467,32 +544,6 @@ export default function TagsPage() {
           </div>
         </div>
 
-        {/* Tag Type Summary Cards */}
-        {!isLoading && filteredTags.length > 0 && typeFilter === 'all' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            {Object.entries(TAG_TYPE_LABELS).map(([type, label]) => {
-              const typeTags = groupedTags[type as TagType] || [];
-              const activeCount = typeTags.filter(t => t.is_active).length;
-              return (
-                <div
-                  key={type}
-                  className="bg-[#faf8f3] border border-[#e8e0d0] p-4 hover:border-[#d4af37]/40 transition-colors cursor-pointer"
-                  onClick={() => setTypeFilter(type as TagType)}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={`text-xs font-semibold px-2 py-1 rounded border ${TAG_TYPE_COLORS[type as TagType]}`}>
-                      {label}
-                    </span>
-                    <span className="text-lg font-bold text-[#d4af37]">{typeTags.length}</span>
-                  </div>
-                  <p className="text-xs text-[#7a6a4a]">
-                    {activeCount} active, {typeTags.length - activeCount} inactive
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
 
       {/* Add Tag Modal */}
@@ -689,7 +740,7 @@ export default function TagsPage() {
                 <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center flex-shrink-0">
                   <AlertCircle className="w-5 h-5 text-red-400" />
                 </div>
-                <div>
+                <div className="flex-1">
                   <p className="text-[#1c1810]">
                     Are you sure you want to delete the tag{" "}
                     <span className="font-semibold text-[#d4af37]">
@@ -697,9 +748,32 @@ export default function TagsPage() {
                     </span>
                     ?
                   </p>
-                  <p className="text-sm text-[#7a6a4a] mt-2">
-                    If this tag is used by products, it will be deactivated instead of deleted.
-                  </p>
+                  {selectedTag.productCount > 0 ? (
+                    <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded">
+                      <p className="text-sm text-amber-800 font-medium">
+                        This tag is currently used by{" "}
+                        <span className="font-bold">{selectedTag.productCount}</span>{" "}
+                        {selectedTag.productCount === 1 ? "product" : "products"}.
+                      </p>
+                      <p className="text-xs text-amber-700 mt-1">
+                        It will be deactivated instead of permanently deleted.
+                      </p>
+                      <button
+                        onClick={() => {
+                          setIsDeleteModalOpen(false);
+                          handleViewProducts(selectedTag);
+                        }}
+                        className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white border border-amber-300 text-amber-800 rounded hover:bg-amber-50 transition-colors"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        View Products
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-[#7a6a4a] mt-2">
+                      This tag has no products assigned and will be permanently deleted.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -730,6 +804,98 @@ export default function TagsPage() {
                     Delete
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Products Modal */}
+      {isViewProductsOpen && viewProductsTag && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#faf8f3] border border-[#e8e0d0] w-full max-w-lg shadow-2xl">
+            <div className="px-6 py-4 border-b border-[#e8e0d0] flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-[#d4af37]">
+                  Products Using &quot;{viewProductsTag.name}&quot;
+                </h2>
+                {!isLoadingProducts && (
+                  <p className="text-xs text-[#7a6a4a] mt-0.5">
+                    {viewProductsList.length} {viewProductsList.length === 1 ? "product" : "products"} found
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  setIsViewProductsOpen(false);
+                  setViewProductsList([]);
+                  setViewProductsTag(null);
+                }}
+                className="p-1 text-[#7a6a4a] hover:text-[#1c1810] transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto max-h-96">
+              {isLoadingProducts ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-[#d4af37]" />
+                </div>
+              ) : viewProductsList.length === 0 ? (
+                <div className="py-12 text-center text-[#7a6a4a] text-sm">
+                  No products found.
+                </div>
+              ) : (
+                <table className="w-full">
+                  <thead className="bg-white border-b border-[#e8e0d0] sticky top-0">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-[#7a6a4a] uppercase tracking-wider">
+                        Product Name
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-[#7a6a4a] uppercase tracking-wider">
+                        Category
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-[#7a6a4a] uppercase tracking-wider">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#d4af37]/10">
+                    {viewProductsList.map((product) => (
+                      <tr key={product.id} className="hover:bg-[#d4af37]/5 transition-colors">
+                        <td className="px-6 py-3 text-sm font-medium text-[#1c1810]">
+                          {product.name}
+                        </td>
+                        <td className="px-6 py-3 text-sm text-[#7a6a4a]">
+                          {product.category}
+                        </td>
+                        <td className="px-6 py-3">
+                          <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${
+                            product.isActive
+                              ? "bg-green-100 text-green-800"
+                              : "bg-red-100 text-red-700"
+                          }`}>
+                            {product.isActive ? "Active" : "Inactive"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-[#e8e0d0] flex justify-end">
+              <button
+                onClick={() => {
+                  setIsViewProductsOpen(false);
+                  setViewProductsList([]);
+                  setViewProductsTag(null);
+                }}
+                className="px-4 py-2 border border-[#e8e0d0] text-[#1c1810] hover:bg-[#d4af37]/5 transition-colors"
+              >
+                Close
               </button>
             </div>
           </div>

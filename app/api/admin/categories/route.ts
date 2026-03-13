@@ -22,9 +22,27 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
+    // Count products per category
+    const { data: productRows } = await supabase
+      .from('products')
+      .select('category_id')
+      .eq('is_archived', false);
+
+    const countMap: Record<string, number> = {};
+    for (const p of productRows || []) {
+      if (p.category_id) {
+        countMap[p.category_id] = (countMap[p.category_id] || 0) + 1;
+      }
+    }
+
+    const categoriesWithCount = (categories || []).map(cat => ({
+      ...cat,
+      productCount: countMap[cat.id] || 0,
+    }));
+
     return NextResponse.json({
       success: true,
-      data: categories || []
+      data: categoriesWithCount
     });
 
   } catch (error) {

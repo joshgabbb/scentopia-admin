@@ -20,7 +20,8 @@ export async function GET(request: NextRequest) {
     const perfumeTypeFilter = searchParams.get('perfume_type') || 'all';
     const statusFilter = searchParams.get('status') || 'all';
     const showArchived = searchParams.get('archived') === 'true';
-    const limit = 25;
+    const limitParam = parseInt(searchParams.get('limit') || '25');
+    const limit = [25, 50, 100].includes(limitParam) ? limitParam : 25;
     const offset = (page - 1) * limit;
 
     let query = supabase

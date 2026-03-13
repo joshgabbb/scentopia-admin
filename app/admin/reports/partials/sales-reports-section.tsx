@@ -285,9 +285,9 @@ export default function SalesReportsSection() {
             <YAxis yAxisId="left" stroke="#d4af37" fontSize={11} tickFormatter={formatShortCurrency} />
             <YAxis yAxisId="right" orientation="right" stroke="#b8a070" fontSize={11} />
             <Tooltip content={<CustomTooltip />} />
-            <Legend wrapperStyle={{ color: "#b8a070", fontSize: 12 }} />
+            <Legend wrapperStyle={{ color: "#1c1810", fontSize: 12 }} />
             <Area yAxisId="left" type="monotone" dataKey="revenue" name="Revenue" stroke="#d4af37" strokeWidth={2} fill="url(#revenueGradient)" />
-            <Line yAxisId="right" type="monotone" dataKey="orders" name="Orders" stroke="#f5e6d3" strokeWidth={2} dot={{ fill: "#f5e6d3", r: 3 }} />
+            <Line yAxisId="right" type="monotone" dataKey="orders" name="Orders" stroke="#4B5563" strokeWidth={2} dot={{ fill: "#4B5563", r: 3 }} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>

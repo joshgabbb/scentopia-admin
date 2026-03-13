@@ -641,8 +641,8 @@ export default function DashboardPage() {
                     <stop offset="95%" stopColor="#D4AF37" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="colorOrders" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#4B5563" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#4B5563" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_COLOR} />
@@ -652,7 +652,7 @@ export default function DashboardPage() {
                 <Tooltip content={<CustomTooltip />} />
                 <Legend wrapperStyle={{ paddingTop: "20px" }} formatter={(value) => <span className={`${themeClasses.text} text-sm font-medium`}>{value}</span>} />
                 <Area yAxisId="left" type="monotone" dataKey="revenue" name="Revenue" stroke="#D4AF37" strokeWidth={2.5} fill="url(#colorRevenue)" />
-                <Area yAxisId="right" type="monotone" dataKey="orders" name="Orders" stroke="#22c55e" strokeWidth={2.5} fill="url(#colorOrders)" />
+                <Area yAxisId="right" type="monotone" dataKey="orders" name="Orders" stroke="#4B5563" strokeWidth={2.5} fill="url(#colorOrders)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>

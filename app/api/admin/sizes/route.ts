@@ -21,9 +21,43 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
+    // Count products using each size.
+    // Products may store sizes as "50ml", "50 ml", or bare "50" — normalize both sides.
+    const normKey = (s: string) =>
+      s.toLowerCase().replace(/\s+/g, '').replace(/ml$/i, '');
+
+    const { data: products } = await supabase
+      .from('products')
+      .select('sizes')
+      .eq('is_archived', false);
+
+    const usageMap: Record<string, number> = {};
+    for (const product of products || []) {
+      for (const key of Object.keys(product.sizes || {})) {
+        const n = normKey(key);
+        usageMap[n] = (usageMap[n] || 0) + 1;
+      }
+    }
+
+    const sizesWithCount = (sizes || []).map(size => ({
+      ...size,
+      productCount: usageMap[normKey(size.name)] || 0,
+    }));
+
+    // Find size keys used in products that have no matching entry in the sizes table
+    const allProductKeys = new Set<string>();
+    for (const product of products || []) {
+      for (const key of Object.keys(product.sizes || {})) {
+        allProductKeys.add(key);
+      }
+    }
+    const knownNorms = new Set((sizes || []).map(s => normKey(s.name)));
+    const orphanKeys = [...allProductKeys].filter(k => !knownNorms.has(normKey(k)));
+
     return NextResponse.json({
       success: true,
-      data: sizes || []
+      data: sizesWithCount,
+      orphanKeys,
     });
 
   } catch (error) {
@@ -185,16 +219,35 @@ export async function DELETE(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Check if any products are using this size
-    const { data: products, error: productError } = await supabase
+    // Look up the size name so we can check JSONB keys (sizes are stored as JSONB, not a FK)
+    const { data: sizeRecord, error: sizeRecordError } = await supabase
+      .from('sizes')
+      .select('name')
+      .eq('id', id)
+      .single();
+
+    if (sizeRecordError || !sizeRecord) {
+      return NextResponse.json(
+        { success: false, error: 'Size not found' },
+        { status: 404 }
+      );
+    }
+
+    // Check if any non-archived products use this size key (normalized comparison)
+    const normKey = (s: string) =>
+      s.toLowerCase().replace(/\s+/g, '').replace(/ml$/i, '');
+    const targetNorm = normKey(sizeRecord.name);
+
+    const { data: allProducts } = await supabase
       .from('products')
-      .select('id')
-      .eq('size_id', id)
-      .limit(1);
+      .select('sizes')
+      .eq('is_archived', false);
 
-    if (productError) throw productError;
+    const isInUse = (allProducts || []).some(p =>
+      Object.keys(p.sizes || {}).some(k => normKey(k) === targetNorm)
+    );
 
-    if (products && products.length > 0) {
+    if (isInUse) {
       // Soft delete - just deactivate the size
       const { data: size, error } = await supabase
         .from('sizes')

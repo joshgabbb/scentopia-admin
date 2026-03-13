@@ -5,7 +5,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft, RefreshCw, Download, AlertTriangle, AlertCircle,
-  Info, Zap, Package, Bell, CheckCircle, ArrowDownToLine, X,
+  Info, Zap, Package, CheckCircle, ArrowDownToLine, X,
 } from "lucide-react";
 import ExportModal, { ExportOptions } from "@/components/ExportModal";
 import { exportReport, type ExportConfig } from "@/lib/export-utils";
@@ -295,8 +295,6 @@ export default function InventoryAlertsPage() {
   const [typeFilter,    setTypeFilter]    = useState("all");
   const [isLoading,     setIsLoading]     = useState(true);
   const [showExport,    setShowExport]    = useState(false);
-  const [notifyState,   setNotifyState]   = useState<"idle" | "loading" | "done" | "error">("idle");
-  const [notifyMsg,     setNotifyMsg]     = useState("");
   const [stockInAlert,  setStockInAlert]  = useState<InventoryAlert | null>(null);
   const [stockInToast,  setStockInToast]  = useState("");
 
@@ -317,29 +315,6 @@ export default function InventoryAlertsPage() {
   }, [typeFilter]);
 
   useEffect(() => { fetchAlerts(); }, [fetchAlerts]);
-
-  // Push critical/low-stock alerts into admin_notifications (24 h cooldown)
-  const handleNotify = async () => {
-    setNotifyState("loading");
-    setNotifyMsg("");
-    try {
-      const res    = await fetch("/api/admin/reports/inventory-alerts", { method: "POST" });
-      const result = await res.json();
-      if (result.success) {
-        setNotifyState("done");
-        setNotifyMsg(result.data.message);
-        setTimeout(() => setNotifyState("idle"), 5000);
-      } else {
-        setNotifyState("error");
-        setNotifyMsg(result.error ?? "Failed to send notifications");
-        setTimeout(() => setNotifyState("idle"), 5000);
-      }
-    } catch {
-      setNotifyState("error");
-      setNotifyMsg("Network error — could not send notifications");
-      setTimeout(() => setNotifyState("idle"), 5000);
-    }
-  };
 
   const handleExport = (options: ExportOptions) => {
     const config: ExportConfig = {
@@ -416,27 +391,6 @@ export default function InventoryAlertsPage() {
             >
               <RefreshCw className="w-4 h-4" />
             </button>
-            {/* Notify button — creates admin_notifications for critical/low stock */}
-            <button
-              onClick={handleNotify}
-              disabled={notifyState === "loading"}
-              className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-sm transition-colors border ${
-                notifyState === "done"
-                  ? "bg-emerald-50 text-emerald-700 border-emerald-300"
-                  : notifyState === "error"
-                  ? "bg-red-50 text-red-700 border-red-300"
-                  : "bg-white text-[#7a6a4a] border-[#e8e0d0] hover:bg-[#faf8f3] hover:text-[#8B6914] hover:border-[#D4AF37]/40"
-              } disabled:opacity-60`}
-              title="Create notification entries for all critical and low-stock products (24 h cooldown per product)"
-            >
-              {notifyState === "loading" ? (
-                <><div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> Notifying…</>
-              ) : notifyState === "done" ? (
-                <><CheckCircle className="w-4 h-4" /> Notified</>
-              ) : (
-                <><Bell className="w-4 h-4" /> Notify Team</>
-              )}
-            </button>
             <button
               onClick={() => setShowExport(true)}
               className="inline-flex items-center gap-2 px-4 py-2 bg-[#D4AF37] text-[#1c1810] font-semibold text-sm rounded-sm hover:bg-[#C4A030] transition-colors shadow-sm"
@@ -446,17 +400,6 @@ export default function InventoryAlertsPage() {
             </button>
           </div>
         </div>
-
-        {/* Notify feedback */}
-        {notifyMsg && (
-          <div className={`px-4 py-3 rounded-sm text-sm border ${
-            notifyState === "done" || notifyState === "idle"
-              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-              : "bg-red-50 text-red-800 border-red-200"
-          }`}>
-            {notifyMsg}
-          </div>
-        )}
 
         {/* Threshold explanation */}
         <div className="flex items-start gap-3 bg-[#faf8f3] border border-[#D4AF37]/30 rounded-sm px-4 py-3">

@@ -32,15 +32,35 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
+    // Count products per tag name by scanning all tag arrays
+    const { data: productRows } = await supabase
+      .from('products')
+      .select('occasions_tags, weather_tags, top_notes_tags, other_options_tags')
+      .eq('is_archived', false);
+
+    const usageMap: Record<string, number> = {};
+    for (const p of productRows || []) {
+      for (const field of ['occasions_tags', 'weather_tags', 'top_notes_tags', 'other_options_tags'] as const) {
+        for (const tagName of ((p[field] as string[]) || [])) {
+          usageMap[tagName] = (usageMap[tagName] || 0) + 1;
+        }
+      }
+    }
+
+    const tagsWithCount = (tags || []).map(tag => ({
+      ...tag,
+      productCount: usageMap[tag.name] || 0,
+    }));
+
     // Group tags by type for easier consumption
     const groupedTags = VALID_TAG_TYPES.reduce((acc, type) => {
-      acc[type] = (tags || []).filter(tag => tag.type === type);
+      acc[type] = tagsWithCount.filter(tag => tag.type === type);
       return acc;
-    }, {} as Record<TagType, typeof tags>);
+    }, {} as Record<TagType, typeof tagsWithCount>);
 
     return NextResponse.json({
       success: true,
-      data: tags || [],
+      data: tagsWithCount,
       grouped: groupedTags
     });
 

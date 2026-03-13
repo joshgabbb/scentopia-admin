@@ -128,6 +128,9 @@ export async function PATCH(
     const body = await request.json();
     const updateData = { ...body };
 
+    // Stocks are only allowed to change via /api/admin/stock/in and /api/admin/stock/out
+    delete updateData.stocks;
+
     // ✅ GET OLD PRODUCT DATA BEFORE UPDATING (FOR AUDIT LOG)
     const { data: oldProduct } = await supabase
       .from("products")
@@ -151,6 +154,27 @@ export async function PATCH(
     }
 
     updateData.updated_at = new Date().toISOString();
+
+    // When sizes change, prune stocks to remove keys for deleted sizes.
+    // New sizes start at 0 stock — must come through stock-in.
+    if (updateData.sizes !== undefined) {
+      // Normalize: "30ml", "30 ml", "30ML", "30" all collapse to "30"
+      const normKey = (s: string) =>
+        s.toLowerCase().replace(/\s+/g, '').replace(/ml$/i, '');
+
+      const newSizeNorms = new Set(
+        Object.keys(updateData.sizes as Record<string, number>).map(normKey)
+      );
+      const existingStocks = ((oldProduct.stocks ?? {}) as Record<string, number>);
+      const prunedStocks: Record<string, number> = {};
+      for (const [k, qty] of Object.entries(existingStocks)) {
+        // Compare normalized; write back with the original stock key unchanged
+        if (newSizeNorms.has(normKey(k))) prunedStocks[k] = qty;
+      }
+      updateData.stocks = prunedStocks;
+    }
+
+    console.log("[PATCH /products/:id] Sending update for:", productId, "| Keys:", Object.keys(updateData).join(", "));
 
     const { data, error } = await supabase
       .from("products")
@@ -180,6 +204,8 @@ export async function PATCH(
       .single();
 
     if (error) {
+      console.error("[PATCH /products/:id] Supabase update error:", JSON.stringify({ code: error.code, message: error.message, details: error.details, hint: error.hint }, null, 2));
+      console.error("[PATCH /products/:id] Payload keys sent:", Object.keys(updateData));
       if (error.code === "PGRST116") {
         return NextResponse.json(
           { success: false, error: "Product not found" },
@@ -267,11 +293,21 @@ export async function PATCH(
       data: formattedProduct,
     });
   } catch (error) {
+    // Supabase PostgrestError is NOT a JS Error instance — extract message manually
+    const errMsg =
+      error instanceof Error
+        ? error.message
+        : typeof error === "object" && error !== null
+        ? (error as Record<string, unknown>).message as string ||
+          (error as Record<string, unknown>).details as string ||
+          JSON.stringify(error)
+        : String(error);
+    console.error("[PATCH /products/:id] Caught error:", errMsg);
     return NextResponse.json(
       {
         success: false,
         error: "Failed to update product",
-        details: error instanceof Error ? error.message : "Unknown error",
+        details: errMsg,
       },
       { status: 500 }
     );

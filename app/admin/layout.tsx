@@ -24,6 +24,7 @@ import {
   Archive,
   TrendingUp,
   TrendingDown,
+  SlidersHorizontal,
   Cog,
   MessageSquare,
   AlertTriangle,
@@ -60,6 +61,7 @@ const menuItems: MenuItem[] = [
       { id: "categories", label: "Categories", icon: Tag },
       { id: "tags", label: "Tags", icon: Tag },
       { id: "sizes", label: "Sizes", icon: Ruler },
+      { id: "normalize-prices", label: "Normalize Prices", icon: SlidersHorizontal },
       { id: "fast-moving", label: "Fast-Moving", icon: TrendingUp },
       { id: "slow-moving", label: "Slow-Moving", icon: TrendingDown },
       { id: "archived", label: "Archived", icon: Archive },
@@ -381,7 +383,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
 
   // Auto-expand parent menu when on a child page
   useEffect(() => {
-    const productChildIds = ["products", "categories", "tags", "sizes", "archived", "fast-moving", "slow-moving", "barcodes"];
+    const productChildIds = ["products", "categories", "tags", "sizes", "normalize-prices", "archived", "fast-moving", "slow-moving", "barcodes"];
     const clientChildIds = ["users", "users-archived"];
     const managementChildIds = ["audit-trails", "feedback", "notifications", "inventory-alerts"];
     const inventoryChildIds = ["stock-in", "stock-history", "pos"];
@@ -533,6 +535,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                         if (child.id === "users") childHref = "/admin/users";
                         if (child.id === "users-archived") childHref = "/admin/users/archived";
                         // Products children routes
+                        if (item.id === "products" && child.id === "normalize-prices") childHref = "/admin/products/normalize-prices";
                         if (item.id === "products" && child.id === "fast-moving") childHref = "/admin/products/fast-moving";
                         if (item.id === "products" && child.id === "slow-moving") childHref = "/admin/products/slow-moving";
                         if (item.id === "products" && child.id === "barcodes") childHref = "/admin/products/barcodes";

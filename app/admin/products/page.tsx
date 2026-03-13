@@ -6,7 +6,6 @@ import {
   ArrowUpDown,
   FileText,
   FileSpreadsheet,
-  Edit,
   MoreHorizontal,
   Download,
   Plus,
@@ -144,6 +143,7 @@ export default function ProductsPage() {
   const [isLoadingProduct, setIsLoadingProduct] = useState(false);
   const [isAddSidebarOpen, setIsAddSidebarOpen] = useState(false);
   const [isBulkActionLoading, setIsBulkActionLoading] = useState(false);
+  const [perPage, setPerPage] = useState(25);
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportFormat, setExportFormat] = useState<ExportFormat>("csv");
   const [categories, setCategories] = useState<Category[]>([]);
@@ -186,6 +186,7 @@ export default function ProductsPage() {
       setError(null);
       const params = new URLSearchParams({
         page: currentPage.toString(),
+        limit: perPage.toString(),
         search: searchTerm,
         sort_by: getSortFieldMapping(sortBy),
         sort_order: sortOrder,
@@ -205,7 +206,7 @@ export default function ProductsPage() {
     }
   };
 
-  useEffect(() => { fetchProducts(); }, [currentPage, sortBy, sortOrder, categoryFilter, perfumeTypeFilter, statusFilter]);
+  useEffect(() => { fetchProducts(); }, [currentPage, perPage, sortBy, sortOrder, categoryFilter, perfumeTypeFilter, statusFilter]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -337,10 +338,6 @@ export default function ProductsPage() {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <button className="px-4 py-2 border border-[#e8e0d0] text-[#1c1810] text-sm font-medium hover:bg-[#f5f0e8] hover:border-[#D4AF37]/40 transition-colors rounded-sm flex items-center gap-2">
-              <Edit className="w-4 h-4 text-[#7a6a4a]" />
-              <span>Bulk Edit</span>
-            </button>
             <button
               onClick={() => setIsAddSidebarOpen(true)}
               className="px-4 py-2 bg-[#D4AF37] text-[#1c1810] font-semibold text-sm hover:bg-[#C4A030] transition-colors rounded-sm flex items-center gap-2 shadow-sm hover:shadow-md hover:shadow-[#D4AF37]/20"
@@ -570,54 +567,63 @@ export default function ProductsPage() {
           {/* Pagination */}
           {data && data.totalPages >= 1 && (
             <div className="px-5 py-4 border-t border-[#e8e0d0] flex flex-col sm:flex-row items-center justify-between gap-3">
-              <p className="text-xs text-[#7a6a4a] font-medium">
-                Showing{" "}
-                <span className="text-[#1c1810] font-bold">{Math.min((currentPage - 1) * 25 + 1, data.totalCount)}</span>
-                {" "}–{" "}
-                <span className="text-[#1c1810] font-bold">{Math.min(currentPage * 25, data.totalCount)}</span>
-                {" "}of{" "}
-                <span className="text-[#1c1810] font-bold">{data.totalCount}</span> products
-              </p>
+              <div className="flex items-center gap-3">
+                <p className="text-xs text-[#7a6a4a] font-medium">
+                  Showing{" "}
+                  <span className="text-[#1c1810] font-bold">{Math.min((currentPage - 1) * perPage + 1, data.totalCount)}</span>
+                  {" "}–{" "}
+                  <span className="text-[#1c1810] font-bold">{Math.min(currentPage * perPage, data.totalCount)}</span>
+                  {" "}of{" "}
+                  <span className="text-[#1c1810] font-bold">{data.totalCount}</span> products
+                </p>
+                <select
+                  value={perPage}
+                  onChange={(e) => { setPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                  className="text-xs border border-[#e8e0d0] bg-white text-[#1c1810] rounded-sm px-2 py-1 focus:outline-none focus:border-[#D4AF37]"
+                >
+                  <option value={25}>25 / page</option>
+                  <option value={50}>50 / page</option>
+                  <option value={100}>100 / page</option>
+                </select>
+              </div>
 
-              {data.totalPages > 1 && (
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="p-1.5 border border-[#e8e0d0] text-[#7a6a4a] hover:bg-[#f5f0e8] hover:border-[#D4AF37]/40 hover:text-[#8B6914] disabled:opacity-40 disabled:cursor-not-allowed transition-colors rounded-sm"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="p-1.5 border border-[#e8e0d0] text-[#7a6a4a] hover:bg-[#f5f0e8] hover:border-[#D4AF37]/40 hover:text-[#8B6914] disabled:opacity-40 disabled:cursor-not-allowed transition-colors rounded-sm"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
 
-                  {getPageNumbers(currentPage, data.totalPages).map((page, idx) =>
-                    page === "..." ? (
-                      <span key={`ellipsis-${idx}`} className="px-2 py-1 text-xs text-[#9a8a6a] select-none">
-                        …
-                      </span>
-                    ) : (
-                      <button
-                        key={page}
-                        onClick={() => setCurrentPage(page as number)}
-                        className={`min-w-[32px] h-8 px-2 text-xs font-semibold border transition-colors rounded-sm ${
-                          currentPage === page
-                            ? "bg-[#D4AF37] text-[#1c1810] border-[#D4AF37] shadow-sm"
-                            : "border-[#e8e0d0] text-[#7a6a4a] hover:bg-[#f5f0e8] hover:border-[#D4AF37]/40 hover:text-[#8B6914]"
-                        }`}
-                      >
-                        {page}
-                      </button>
-                    )
-                  )}
+                {getPageNumbers(currentPage, data.totalPages).map((page, idx) =>
+                  page === "..." ? (
+                    <span key={`ellipsis-${idx}`} className="px-2 py-1 text-xs text-[#9a8a6a] select-none">
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page as number)}
+                      className={`min-w-[32px] h-8 px-2 text-xs font-semibold border transition-colors rounded-sm ${
+                        currentPage === page
+                          ? "bg-[#D4AF37] text-[#1c1810] border-[#D4AF37] shadow-sm"
+                          : "border-[#e8e0d0] text-[#7a6a4a] hover:bg-[#f5f0e8] hover:border-[#D4AF37]/40 hover:text-[#8B6914]"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  )
+                )}
 
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.min(data.totalPages, p + 1))}
-                    disabled={currentPage === data.totalPages}
-                    className="p-1.5 border border-[#e8e0d0] text-[#7a6a4a] hover:bg-[#f5f0e8] hover:border-[#D4AF37]/40 hover:text-[#8B6914] disabled:opacity-40 disabled:cursor-not-allowed transition-colors rounded-sm"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(data.totalPages, p + 1))}
+                  disabled={currentPage === data.totalPages}
+                  className="p-1.5 border border-[#e8e0d0] text-[#7a6a4a] hover:bg-[#f5f0e8] hover:border-[#D4AF37]/40 hover:text-[#8B6914] disabled:opacity-40 disabled:cursor-not-allowed transition-colors rounded-sm"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           )}
         </div>

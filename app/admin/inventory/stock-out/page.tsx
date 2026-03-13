@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { ArrowUpFromLine, CheckCircle, AlertCircle, Loader2, Search, X } from "lucide-react";
+import { ArrowUpFromLine, CheckCircle, AlertCircle, Loader2, Search, X, Package, ChevronDown } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 
 interface Product {
@@ -9,6 +9,7 @@ interface Product {
   sizes: Record<string, number>;
   stocks: Record<string, number>;
   isActive: boolean;
+  category?: { id: string; name: string } | null;
 }
 
 interface Toast {
@@ -29,6 +30,13 @@ export default function StockOutPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const searchRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Browse modal state
+  const [browseOpen, setBrowseOpen] = useState(false);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [isLoadingAll, setIsLoadingAll] = useState(false);
+  const [browseSearch, setBrowseSearch] = useState("");
+  const [browseCategory, setBrowseCategory] = useState("all");
 
   const [selectedSize, setSelectedSize] = useState("");
   const [quantity, setQuantity] = useState("");
@@ -76,8 +84,40 @@ export default function StockOutPage() {
     setSearchResults([]);
     setSelectedSize("");
     setQuantity("");
+    setBrowseOpen(false);
   };
 
+  // Paginate through ALL products
+  const loadAllProducts = useCallback(async () => {
+    if (allProducts.length > 0) { setBrowseOpen(true); return; }
+    setIsLoadingAll(true);
+    try {
+      let page = 1;
+      const accumulated: Product[] = [];
+      while (true) {
+        const res = await fetch(`/api/admin/products?status=active&page=${page}`);
+        const result = await res.json();
+        if (!result.success) break;
+        const batch = (result.data.products as Product[]).filter(p => p.isActive);
+        accumulated.push(...batch);
+        if (page >= (result.data.totalPages || 1)) break;
+        page++;
+      }
+      setAllProducts(accumulated);
+    } catch {
+      setAllProducts([]);
+    } finally {
+      setIsLoadingAll(false);
+      setBrowseOpen(true);
+    }
+  }, [allProducts.length]);
+
+  const handleToggleBrowse = () => {
+    if (browseOpen) { setBrowseOpen(false); return; }
+    loadAllProducts();
+  };
+
+  // Close search dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
@@ -87,6 +127,16 @@ export default function StockOutPage() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  // Lock body scroll when browse modal is open
+  useEffect(() => {
+    if (browseOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [browseOpen]);
 
   const currentSizeStock = selectedProduct && selectedSize
     ? (selectedProduct.stocks?.[selectedSize] ?? 0)
@@ -148,6 +198,26 @@ export default function StockOutPage() {
   const insufficientStock = currentSizeStock !== null && qtyNum > 0 && qtyNum > currentSizeStock;
   const isFormValid = !!(selectedProduct && selectedSize && qtyNum > 0 && reason && !insufficientStock);
 
+  // Derived browse list
+  const browseCategories = ["all", ...Array.from(
+    new Set(allProducts.map(p => p.category?.name ?? "Uncategorized"))
+  ).sort()];
+
+  const filteredBrowse = allProducts.filter(p => {
+    const matchesSearch = !browseSearch.trim() ||
+      p.name.toLowerCase().includes(browseSearch.toLowerCase());
+    const matchesCategory = browseCategory === "all" ||
+      (p.category?.name ?? "Uncategorized") === browseCategory;
+    return matchesSearch && matchesCategory;
+  });
+
+  const grouped = filteredBrowse.reduce<Record<string, Product[]>>((acc, p) => {
+    const cat = p.category?.name ?? "Uncategorized";
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(p);
+    return acc;
+  }, {});
+
   return (
     <div className="max-w-lg space-y-6">
       {/* Toast */}
@@ -159,6 +229,170 @@ export default function StockOutPage() {
             ? <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-green-600" />
             : <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-500" />}
           <p className="text-sm font-medium">{toast.message}</p>
+        </div>
+      )}
+
+      {/* Browse All Products Modal */}
+      {browseOpen && (
+        <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setBrowseOpen(false)}
+          />
+          {/* Panel */}
+          <div className="relative z-10 bg-white w-full sm:max-w-2xl sm:mx-4 rounded-t-2xl sm:rounded-xl shadow-2xl flex flex-col"
+            style={{ maxHeight: "85vh" }}>
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#e8e0d0]">
+              <div className="flex items-center gap-2">
+                <Package className="w-5 h-5 text-[#d4af37]" />
+                <h2 className="text-base font-semibold text-[#1c1810]">Browse All Products</h2>
+                {!isLoadingAll && (
+                  <span className="text-xs text-[#7a6a4a] bg-[#f2ede4] px-2 py-0.5 rounded-full">
+                    {allProducts.length} products
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setBrowseOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-[#faf8f3] text-[#7a6a4a] hover:text-[#1c1810] transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {isLoadingAll ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <Loader2 className="w-6 h-6 animate-spin text-[#d4af37]" />
+                <p className="text-sm text-[#7a6a4a]">Loading all products…</p>
+              </div>
+            ) : (
+              <>
+                {/* Search + category filter */}
+                <div className="px-4 pt-3 pb-2 space-y-2 border-b border-[#e8e0d0]">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#7a6a4a] pointer-events-none" />
+                    <input
+                      type="text"
+                      value={browseSearch}
+                      onChange={e => setBrowseSearch(e.target.value)}
+                      placeholder="Filter by product name…"
+                      className="w-full pl-9 pr-8 py-2 bg-[#faf8f3] border border-[#e8e0d0] rounded-lg text-sm text-[#1c1810] placeholder-[#b0a080] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                    />
+                    {browseSearch && (
+                      <button
+                        onClick={() => setBrowseSearch("")}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#7a6a4a] hover:text-[#1c1810]"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  {/* Category tabs */}
+                  <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                    {browseCategories.map(cat => (
+                      <button
+                        key={cat}
+                        onClick={() => setBrowseCategory(cat)}
+                        className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                          browseCategory === cat
+                            ? "bg-[#d4af37] text-[#0a0a0a]"
+                            : "bg-[#f2ede4] text-[#7a6a4a] hover:bg-[#e8e0d0]"
+                        }`}
+                      >
+                        {cat === "all" ? `All (${allProducts.length})` : cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Product list */}
+                <div className="overflow-y-auto flex-1">
+                  {filteredBrowse.length === 0 ? (
+                    <div className="py-12 text-center text-sm text-[#7a6a4a]">
+                      No products match your filters.
+                    </div>
+                  ) : (
+                    Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([cat, products]) => (
+                      <div key={cat}>
+                        {/* Category header — only shown when showing all categories */}
+                        {browseCategory === "all" && (
+                          <div className="sticky top-0 bg-[#faf8f3] border-b border-[#e8e0d0] px-4 py-2">
+                            <span className="text-xs font-semibold text-[#7a6a4a] uppercase tracking-wider">{cat}</span>
+                            <span className="ml-2 text-xs text-[#b0a080]">{products.length}</span>
+                          </div>
+                        )}
+                        {products.map(p => {
+                          const totalStock = Object.values(p.stocks ?? {}).reduce((sum, v) => sum + v, 0);
+                          const sizeCount = Object.keys(p.sizes ?? {}).length;
+                          const isSelected = selectedProduct?.id === p.id;
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => {
+                                handleSelectProduct(p);
+                                setBrowseOpen(false);
+                                setBrowseSearch("");
+                                setBrowseCategory("all");
+                              }}
+                              className={`w-full text-left px-4 py-3 border-b border-[#e8e0d0] last:border-0 transition-colors ${
+                                isSelected
+                                  ? "bg-[#d4af37]/10"
+                                  : "hover:bg-[#faf8f3]"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium text-[#1c1810] truncate">{p.name}</span>
+                                    {isSelected && (
+                                      <span className="shrink-0 text-xs bg-[#d4af37] text-[#0a0a0a] px-1.5 py-0.5 rounded font-semibold">
+                                        Selected
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                                    {browseCategory === "all" ? null : (
+                                      <span className="text-xs text-[#8B6914] bg-[#f2ede4] px-1.5 py-0.5 rounded">
+                                        {p.category?.name ?? "Uncategorized"}
+                                      </span>
+                                    )}
+                                    <span className="text-xs text-[#7a6a4a]">
+                                      {sizeCount} size{sizeCount !== 1 ? "s" : ""}
+                                    </span>
+                                    <span className={`text-xs font-medium ${totalStock === 0 ? "text-red-600" : "text-green-700"}`}>
+                                      {totalStock} in stock
+                                    </span>
+                                  </div>
+                                </div>
+                                {/* Size stock pills */}
+                                <div className="shrink-0 flex flex-wrap gap-1 justify-end max-w-[160px]">
+                                  {Object.entries(p.stocks ?? {}).map(([size, stock]) => (
+                                    <span
+                                      key={size}
+                                      className={`text-xs px-1.5 py-0.5 rounded border font-mono ${
+                                        stock === 0
+                                          ? "border-red-200 bg-red-50 text-red-600"
+                                          : "border-[#e8e0d0] bg-white text-[#7a6a4a]"
+                                      }`}
+                                    >
+                                      {size}: {stock}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
@@ -219,9 +453,28 @@ export default function StockOutPage() {
               </div>
             )}
           </div>
+
+          {/* Browse button */}
+          <button
+            type="button"
+            onClick={handleToggleBrowse}
+            disabled={isLoadingAll}
+            className="mt-2 flex items-center gap-1.5 text-xs text-[#8B6914] hover:text-[#d4af37] transition-colors disabled:opacity-60"
+          >
+            {isLoadingAll
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              : <Package className="w-3.5 h-3.5" />
+            }
+            {isLoadingAll ? "Loading products…" : "Browse all products"}
+            {!isLoadingAll && <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+
           {selectedProduct && (
             <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1 mt-2">
               Selected: <span className="font-semibold">{selectedProduct.name}</span>
+              {selectedProduct.category && (
+                <span className="text-red-500 ml-1">· {selectedProduct.category.name}</span>
+              )}
             </p>
           )}
         </div>

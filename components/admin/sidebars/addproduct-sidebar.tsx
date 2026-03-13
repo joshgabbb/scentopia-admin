@@ -134,6 +134,13 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
     fetchCategories();
     fetchTags();
     fetchSizes();
+
+    // Re-fetch tags when the tab regains focus (handles tag created in another tab)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) fetchTags();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
   const handleFileSelect = (file: File) => {

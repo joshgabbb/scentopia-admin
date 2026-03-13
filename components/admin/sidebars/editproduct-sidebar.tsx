@@ -55,6 +55,9 @@ interface TagOptions {
   other: string[];
 }
 
+const normKey = (s: string) =>
+  s.toLowerCase().replace(/\s+/g, '').replace(/ml$/i, '');
+
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-PH', {
     style: 'currency',
@@ -138,6 +141,13 @@ export default function EditProduct({ product, onClose, onProductUpdate }: EditP
     fetchCategories();
     fetchTags();
     fetchSizes();
+
+    // Re-fetch tags when the tab regains focus (handles tag created in another tab)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) fetchTags();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
   const handleFileSelect = (file: File) => {
@@ -205,16 +215,6 @@ export default function EditProduct({ product, onClose, onProductUpdate }: EditP
     handleInputChange(field, updatedTags);
   };
 
-  const handleSizeStockChange = (size: string, value: number) => {
-    setFormData(prev => ({
-      ...prev,
-      stocks: {
-        ...prev.stocks,
-        [size]: value
-      }
-    }));
-  };
-
   const handleSizePriceChange = (size: string, value: number) => {
     setFormData(prev => ({
       ...prev,
@@ -226,18 +226,40 @@ export default function EditProduct({ product, onClose, onProductUpdate }: EditP
   };
 
   const handleRemoveSize = (size: string) => {
-    const { [size]: removedSize, ...remainingSizes } = formData.sizes;
-    const { [size]: removedStock, ...remainingStocks } = formData.stocks;
-   
+    // Find the matching stock key by normalized comparison (handles "30" vs "30ml")
+    const matchingStockKey = Object.keys(formData.stocks).find(
+      k => normKey(k) === normKey(size)
+    );
+    const currentStock = matchingStockKey !== undefined
+      ? (formData.stocks[matchingStockKey] ?? 0)
+      : 0;
+
+    if (currentStock > 0) {
+      const confirmed = confirm(
+        `Removing "${size}" will permanently zero out its ${currentStock} unit${currentStock !== 1 ? 's' : ''} of stock.\n\nContinue?`
+      );
+      if (!confirmed) return;
+    }
+
+    const { [size]: _removedSize, ...remainingSizes } = formData.sizes;
+    const stocksAfterRemoval = matchingStockKey !== undefined
+      ? Object.fromEntries(
+          Object.entries(formData.stocks).filter(([k]) => k !== matchingStockKey)
+        )
+      : { ...formData.stocks };
+
     setFormData(prev => ({
       ...prev,
       sizes: remainingSizes,
-      stocks: remainingStocks
+      stocks: stocksAfterRemoval,
     }));
   };
 
   const handleAddSize = (size: string) => {
-    if (formData.sizes[size]) {
+    const alreadyExists = Object.keys(formData.sizes).some(
+      k => normKey(k) === normKey(size)
+    );
+    if (alreadyExists) {
       alert('This size already exists!');
       return;
     }
@@ -320,7 +342,10 @@ export default function EditProduct({ product, onClose, onProductUpdate }: EditP
         onClose();
       } else {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update product');
+        const message = errorData.details
+          ? `${errorData.error || 'Failed to update product'}: ${errorData.details}`
+          : (errorData.error || 'Failed to update product');
+        throw new Error(message);
       }
     } catch (error) {
       console.error('Error updating product:', error);
@@ -391,7 +416,10 @@ export default function EditProduct({ product, onClose, onProductUpdate }: EditP
     </div>
   );
 
-  const availableSizesToAdd = sizeOptions.filter(size => size.is_active && !formData.sizes[size.name]);
+  const currentSizeNorms = new Set(Object.keys(formData.sizes).map(normKey));
+  const availableSizesToAdd = sizeOptions.filter(
+    size => size.is_active && !currentSizeNorms.has(normKey(size.name))
+  );
 
   return (
     <div className="h-full flex flex-col bg-white">
@@ -570,11 +598,14 @@ export default function EditProduct({ product, onClose, onProductUpdate }: EditP
                       onChange={(e) => handleSizePriceChange(size, parseFloat(e.target.value))}
                       className="w-24 p-2 text-sm bg-white border border-[#e8e0d0] rounded text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
                     >
-                      {PRICE_OPTIONS.map(priceOption => (
-                        <option key={priceOption} value={priceOption} className="bg-[#faf8f3]">
-                          ₱{priceOption}
-                        </option>
-                      ))}
+                      {/* Include the current price if it isn't one of the presets */}
+                      {[...new Set([...PRICE_OPTIONS, ...(PRICE_OPTIONS.includes(price) ? [] : [price])])]
+                        .sort((a, b) => a - b)
+                        .map(priceOption => (
+                          <option key={priceOption} value={priceOption} className="bg-[#faf8f3]">
+                            ₱{priceOption}{!PRICE_OPTIONS.includes(priceOption) ? ' (current)' : ''}
+                          </option>
+                        ))}
                     </select>
                   </div>
 
@@ -615,7 +646,12 @@ export default function EditProduct({ product, onClose, onProductUpdate }: EditP
 
         {/* Current Stock (read-only) */}
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold tracking-wider text-[#d4af37] uppercase border-b border-[#e8e0d0] pb-2">Current Stock</h3>
+          <div className="flex items-center justify-between border-b border-[#e8e0d0] pb-2">
+            <h3 className="text-lg font-semibold tracking-wider text-[#d4af37] uppercase">Current Stock</h3>
+            <span className="text-xs text-[#7a6a4a] bg-[#faf8f3] border border-[#e8e0d0] px-2 py-1 rounded">
+              Read-only · managed via Stock In / Out
+            </span>
+          </div>
           <div className="space-y-2">
             {Object.entries(formData.stocks).length > 0 ? (
               Object.entries(formData.stocks).map(([size, stock]) => (
