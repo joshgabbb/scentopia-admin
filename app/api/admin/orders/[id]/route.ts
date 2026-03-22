@@ -17,6 +17,9 @@ export async function GET(
       .select(`
         id,
         amount,
+        voucher_code,
+        discount_amount,
+        original_amount,
         created_at,
         order_status,
         email,
@@ -219,6 +222,10 @@ export async function GET(
         ? Number(courierInfo.shipping_fee)
         : null,
       estimatedDelivery: courierInfo.estimated_delivery || deliveryLocation?.courier_info?.estimated_delivery || null,
+      // Voucher / discount info
+      voucherCode: (order as any).voucher_code || null,
+      discountAmount: Number((order as any).discount_amount || 0),
+      originalAmount: (order as any).original_amount ? Number((order as any).original_amount) : null,
       // Delivery location from checkout
       deliveryLocation: deliveryLocation,
       deliveryAddress: deliveryAddressString,

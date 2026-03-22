@@ -92,10 +92,11 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    // Fetch refund to get amount and user_id
+    // Fetch refund with order contact info and profile name
     const { data: refund, error: fetchErr } = await supabase
       .from("refunds")
-      .select("id, order_id, user_id, amount, status")
+      .select(`id, order_id, user_id, amount, status,
+        orders!refunds_order_id_fkey(email, contact_number)`)
       .eq("id", refundId)
       .single();
 
@@ -150,6 +151,72 @@ export async function PATCH(request: NextRequest) {
       });
 
       if (txErr) throw txErr;
+    }
+
+    // Push notification to customer (non-critical)
+    try {
+      const notifMap = {
+        approve: {
+          title: "✅ Refund Approved!",
+          body: `Your refund of ₱${Number(refund.amount).toFixed(2)} has been credited to your wallet.`,
+          type: "successful_order",
+        },
+        decline: {
+          title: "❌ Refund Request Declined",
+          body: adminNote?.trim()
+            ? `Your refund was declined. Reason: ${adminNote.trim()}`
+            : "Your refund request has been declined. Contact support for details.",
+          type: "cancelled_order",
+        },
+      };
+      const notif = notifMap[action];
+      await supabase.from("notifications").insert({
+        user_id: refund.user_id,
+        notification_type: notif.type,
+        title: notif.title,
+        body: notif.body,
+        is_read: false,
+        send_push_notification: true,
+        metadata: {
+          action: "order-redirect",
+          order_id: refund.order_id,
+        },
+      });
+    } catch (pushErr) {
+      console.error("Refund push notification error (non-critical):", pushErr);
+    }
+
+    // Send email + SMS to customer (non-critical)
+    try {
+      const order = (refund as any).orders;
+      const customerEmail = order?.email ?? null;
+
+      if (customerEmail) {
+        // Fetch customer name from profiles
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("first_name, last_name")
+          .eq("id", refund.user_id)
+          .maybeSingle();
+
+        const customerName = profile
+          ? [profile.first_name, profile.last_name].filter(Boolean).join(" ") || "Customer"
+          : "Customer";
+
+        await supabase.functions.invoke("send-refund-decision-email", {
+          body: {
+            customer_email: customerEmail,
+            customer_name: customerName,
+            customer_phone: order?.contact_number ?? null,
+            order_id: refund.order_id,
+            amount: refund.amount,
+            action,
+            admin_note: adminNote ?? null,
+          },
+        });
+      }
+    } catch (notifyErr) {
+      console.error("Refund notification error (non-critical):", notifyErr);
     }
 
     return NextResponse.json({ success: true, status: newStatus });

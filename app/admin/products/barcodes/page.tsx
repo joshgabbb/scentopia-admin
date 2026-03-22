@@ -520,7 +520,7 @@ export default function BarcodesPage() {
                   />
                   <InfoRow
                     label="Generated"
-                    value={new Date(selectedBarcode.created_at).toLocaleDateString()}
+                    value={new Date(selectedBarcode.created_at).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Manila" })}
                   />
                 </div>
 
@@ -626,7 +626,7 @@ export default function BarcodesPage() {
                       <td className="px-4 py-3 text-[#7a6a4a] dark:text-[#9a8a68] text-xs">
                         <div className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />
-                          {new Date(scan.scanned_at).toLocaleString()}
+                          {new Date(scan.scanned_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}
                         </div>
                       </td>
                     </tr>

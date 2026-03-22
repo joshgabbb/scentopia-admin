@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Search,
   ArrowUpDown,
@@ -17,6 +17,8 @@ import {
   ToggleRight,
   ChevronLeft,
   ChevronRight,
+  Tag,
+  Layers,
 } from "lucide-react";
 import ProductDetails from "./product-details";
 import CustomSidebar from "@/components/modals/sidebar";
@@ -86,7 +88,7 @@ const formatCurrency = (amount: number) =>
   new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(amount);
 
 const formatDate = (dateString: string) =>
-  new Date(dateString).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  new Date(dateString).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Manila" });
 
 const getStatusBadge = (isActive: boolean) =>
   isActive
@@ -141,12 +143,14 @@ export default function ProductsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isLoadingProduct, setIsLoadingProduct] = useState(false);
+  const [previewProduct, setPreviewProduct] = useState<Product | null>(null);
   const [isAddSidebarOpen, setIsAddSidebarOpen] = useState(false);
   const [isBulkActionLoading, setIsBulkActionLoading] = useState(false);
   const [perPage, setPerPage] = useState(25);
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportFormat, setExportFormat] = useState<ExportFormat>("csv");
   const [categories, setCategories] = useState<Category[]>([]);
+  const [productStats, setProductStats] = useState({ total: 0, active: 0, inactive: 0, basic: 0, premium: 0 });
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -158,7 +162,32 @@ export default function ProductsPage() {
         console.error("Failed to fetch categories:", err);
       }
     };
+    const fetchProductStats = async () => {
+      try {
+        const [allRes, activeRes, premiumRes, basicRes] = await Promise.all([
+          fetch("/api/admin/products?limit=1&status=all"),
+          fetch("/api/admin/products?limit=1&status=active"),
+          fetch("/api/admin/products?limit=1&perfume_type=Premium&status=all"),
+          fetch("/api/admin/products?limit=1&perfume_type=Basic&status=all"),
+        ]);
+        const [allData, activeData, premiumData, basicData] = await Promise.all([
+          allRes.json(), activeRes.json(), premiumRes.json(), basicRes.json(),
+        ]);
+        const total = allData.data?.totalCount ?? 0;
+        const active = activeData.data?.totalCount ?? 0;
+        setProductStats({
+          total,
+          active,
+          inactive: total - active,
+          premium: premiumData.data?.totalCount ?? 0,
+          basic: basicData.data?.totalCount ?? 0,
+        });
+      } catch (err) {
+        console.error("Failed to fetch product stats:", err);
+      }
+    };
     fetchCategories();
+    fetchProductStats();
   }, []);
 
   const handleProductUpdate = (productId: string, updates: Partial<Product>) => {};
@@ -325,8 +354,153 @@ export default function ProductsPage() {
   const selectFieldClass =
     "px-3 py-2 border border-[#e8e0d0] bg-white text-[#1c1810] text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40 focus:border-[#D4AF37] rounded-sm transition-colors hover:border-[#D4AF37]/50 min-w-0";
 
+  // Product Preview Modal
+  const ProductPreviewModal = ({ product, onClose }: { product: Product; onClose: () => void }) => {
+    const [imgIndex, setImgIndex] = useState(0);
+    const modalRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+      const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+      document.addEventListener("keydown", handleKey);
+      return () => document.removeEventListener("keydown", handleKey);
+    }, [onClose]);
+
+    const images = product.images?.length ? product.images : [];
+    const sizes = Object.entries(product.sizes || {});
+    const stocks = product.stocks || {};
+    const allTags = [
+      ...product.occasionsTags,
+      ...product.weatherTags,
+      ...product.topNotesTags,
+      ...product.otherOptionsTags,
+    ];
+
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      >
+        <div
+          ref={modalRef}
+          className="bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-[#e8e0d0]"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#e8e0d0]">
+            <h2 className="text-base font-semibold text-[#1c1810]">Product Preview</h2>
+            <button onClick={onClose} className="p-1.5 rounded hover:bg-[#f2ede4] text-[#7a6a4a] transition-colors">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-5">
+            {/* Image carousel + basic info */}
+            <div className="flex gap-5">
+              {/* Image */}
+              <div className="w-40 flex-shrink-0">
+                {images.length > 0 ? (
+                  <div className="relative">
+                    <img
+                      src={images[imgIndex]}
+                      alt={product.name}
+                      className="w-40 h-40 object-cover rounded-lg border border-[#e8e0d0]"
+                    />
+                    {images.length > 1 && (
+                      <div className="flex items-center justify-center gap-1 mt-2">
+                        <button
+                          onClick={() => setImgIndex((i) => (i - 1 + images.length) % images.length)}
+                          className="p-0.5 rounded hover:bg-[#f2ede4] text-[#7a6a4a]"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <span className="text-xs text-[#7a6a4a]">{imgIndex + 1}/{images.length}</span>
+                        <button
+                          onClick={() => setImgIndex((i) => (i + 1) % images.length)}
+                          className="p-0.5 rounded hover:bg-[#f2ede4] text-[#7a6a4a]"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="w-40 h-40 rounded-lg border border-[#e8e0d0] bg-[#faf8f3] flex items-center justify-center">
+                    <Package className="w-10 h-10 text-[#D4AF37]/40" />
+                  </div>
+                )}
+              </div>
+
+              {/* Info */}
+              <div className="flex-1 min-w-0 space-y-2">
+                <div>
+                  <h3 className="text-lg font-semibold text-[#1c1810] leading-tight">{product.name}</h3>
+                  {product.category && (
+                    <p className="text-sm text-[#7a6a4a] mt-0.5">{product.category.name}</p>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <span className={`px-2 py-0.5 text-xs font-medium rounded-full border ${getPerfumeTypeBadge(product.perfumeType)}`}>
+                    {product.perfumeType}
+                  </span>
+                  <span className={`px-2 py-0.5 text-xs font-medium rounded-full border ${getStatusBadge(product.isActive)}`}>
+                    {product.isActive ? "Active" : "Inactive"}
+                  </span>
+                </div>
+                {product.description && (
+                  <p className="text-sm text-[#7a6a4a] leading-relaxed line-clamp-4">{product.description}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Sizes, Prices & Stock */}
+            {sizes.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-[#8B6914] uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5" /> Sizes & Stock
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {sizes.map(([size, price]) => (
+                    <div key={size} className="border border-[#e8e0d0] rounded-lg px-3 py-2 bg-[#faf8f3]">
+                      <p className="text-xs text-[#7a6a4a] font-medium">{size}ml</p>
+                      <p className="text-sm font-semibold text-[#1c1810]">{formatCurrency(price)}</p>
+                      <p className="text-xs text-[#9a8a6a]">{stocks[size] ?? 0} in stock</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Tags */}
+            {allTags.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-[#8B6914] uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5" /> Tags
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {allTags.map((tag) => (
+                    <span key={tag} className="px-2 py-0.5 text-xs bg-[#f2ede4] text-[#7a6a4a] rounded-full border border-[#e8e0d0]">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Footer meta */}
+            <div className="pt-2 border-t border-[#e8e0d0] flex justify-between text-xs text-[#9a8a6a]">
+              <span>Added {formatDate(product.createdAt)}</span>
+              <span>Total stock: {product.totalStock} units</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <>
+      {previewProduct && (
+        <ProductPreviewModal product={previewProduct} onClose={() => setPreviewProduct(null)} />
+      )}
       <div className="space-y-5">
 
         {/* Page header */}
@@ -345,6 +519,36 @@ export default function ProductsPage() {
               <Plus className="w-4 h-4" />
               <span>Add Product</span>
             </button>
+          </div>
+        </div>
+
+        {/* Summary cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-[#faf8f3] border border-[#e8e0d0] p-4">
+            <p className="text-sm text-[#7a6a4a]">Total Products</p>
+            <p className="text-2xl font-bold text-[#d4af37]">{(productStats.total ?? 0).toLocaleString()}</p>
+          </div>
+          <div className="bg-[#faf8f3] border border-[#e8e0d0] p-4">
+            <p className="text-sm text-[#7a6a4a]">Active</p>
+            <p className="text-2xl font-bold text-green-600">{(productStats.active ?? 0).toLocaleString()}</p>
+          </div>
+          <div className="bg-[#faf8f3] border border-[#e8e0d0] p-4">
+            <p className="text-sm text-[#7a6a4a]">Inactive</p>
+            <p className="text-2xl font-bold text-red-500">{(productStats.inactive ?? 0).toLocaleString()}</p>
+          </div>
+          <div className="bg-[#faf8f3] border border-[#e8e0d0] p-4">
+            <p className="text-sm text-[#7a6a4a]">By Type</p>
+            <div className="flex items-end gap-3 mt-1">
+              <div>
+                <p className="text-2xl font-bold text-blue-600">{(productStats.basic ?? 0).toLocaleString()}</p>
+                <p className="text-xs text-[#9a8a6a]">Basic</p>
+              </div>
+              <span className="text-[#e8e0d0] text-xl mb-1">·</span>
+              <div>
+                <p className="text-2xl font-bold text-purple-600">{(productStats.premium ?? 0).toLocaleString()}</p>
+                <p className="text-xs text-[#9a8a6a]">Premium</p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -539,9 +743,9 @@ export default function ProductsPage() {
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                           <button
-                            onClick={() => handleProductClick(product)}
+                            onClick={() => setPreviewProduct(product)}
                             className="p-1.5 text-[#9a8a6a] hover:text-[#8B6914] hover:bg-[#D4AF37]/10 rounded-sm transition-colors"
-                            title="View"
+                            title="Quick preview"
                           >
                             <Eye className="w-4 h-4" />
                           </button>
@@ -552,7 +756,11 @@ export default function ProductsPage() {
                           >
                             <Archive className="w-4 h-4" />
                           </button>
-                          <button className="p-1.5 text-[#9a8a6a] hover:text-[#8B6914] hover:bg-[#D4AF37]/10 rounded-sm transition-colors">
+                          <button
+                            onClick={() => handleProductClick(product)}
+                            className="p-1.5 text-[#9a8a6a] hover:text-[#8B6914] hover:bg-[#D4AF37]/10 rounded-sm transition-colors"
+                            title="More details"
+                          >
                             <MoreHorizontal className="w-4 h-4" />
                           </button>
                         </div>

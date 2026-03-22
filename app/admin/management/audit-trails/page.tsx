@@ -265,7 +265,7 @@ export default function AuditTrailsPage() {
     const fmt = (ts: string) =>
       new Date(ts).toLocaleString("en-US", {
         year: "numeric", month: "short", day: "numeric",
-        hour: "2-digit", minute: "2-digit",
+        hour: "2-digit", minute: "2-digit", timeZone: "Asia/Manila",
       });
 
     const config: ExportConfig = {
@@ -465,7 +465,7 @@ export default function AuditTrailsPage() {
                   {logs.map((log) => (
                     <tr key={log.id} className="hover:bg-[#faf8f3] transition-colors">
                       <td className="px-4 py-3.5 text-sm text-[#1c1810] whitespace-nowrap">
-                        {new Date(log.timestamp).toLocaleString()}
+                        {new Date(log.timestamp).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}
                       </td>
                       <td className="px-4 py-3.5">
                         <div className="font-semibold text-sm text-[#1c1810]">{log.adminName}</div>
@@ -567,7 +567,7 @@ export default function AuditTrailsPage() {
               <div className="px-6 py-4 border-b border-[#e8e0d0] flex items-start justify-between sticky top-0 bg-[#faf8f3] z-10">
                 <div>
                   <h2 className="text-base font-bold text-[#1c1810]">Audit Log Details</h2>
-                  <p className="text-xs text-[#7a6a4a] mt-0.5">{new Date(selectedLog.timestamp).toLocaleString()}</p>
+                  <p className="text-xs text-[#7a6a4a] mt-0.5">{new Date(selectedLog.timestamp).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}</p>
                 </div>
                 <button
                   onClick={() => setSelectedLog(null)}

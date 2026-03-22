@@ -298,7 +298,7 @@ export default function NotificationsPage() {
         } else if (formData.scheduledAt) {
           // Scheduled for later
           const scheduledDate = new Date(formData.scheduledAt);
-          alert(`📅 Notification scheduled for ${scheduledDate.toLocaleString()}!\n\nUsers will receive this notification at the scheduled time.`);
+          alert(`📅 Notification scheduled for ${scheduledDate.toLocaleString("en-PH", { timeZone: "Asia/Manila" })}!\n\nUsers will receive this notification at the scheduled time.`);
         } else {
           // Saved as draft
           alert("✅ Notification saved as draft!\n\nYou can send it later from the notifications list.");
@@ -519,7 +519,8 @@ export default function NotificationsPage() {
       day: 'numeric',
       year: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      timeZone: 'Asia/Manila',
     });
   };
 
@@ -720,7 +721,7 @@ export default function NotificationsPage() {
                                 </span>
                               ) : (
                                 /* If scheduled time is in future, show waiting indicator */
-                                <span className="px-3 py-1.5 bg-blue-600/20 text-blue-400 text-xs font-medium rounded" title={`Will auto-send at ${notif.scheduledAt ? new Date(notif.scheduledAt).toLocaleString() : 'scheduled time'}`}>
+                                <span className="px-3 py-1.5 bg-blue-600/20 text-blue-400 text-xs font-medium rounded" title={`Will auto-send at ${notif.scheduledAt ? new Date(notif.scheduledAt).toLocaleString("en-PH", { timeZone: "Asia/Manila" }) : 'scheduled time'}`}>
                                   ⏰ Waiting
                                 </span>
                               )}
@@ -991,7 +992,7 @@ export default function NotificationsPage() {
               {/* Info about scheduling */}
               {formData.scheduledAt && (
                 <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded text-blue-300 text-sm">
-                  📅 <strong>Scheduling for:</strong> {new Date(formData.scheduledAt).toLocaleString()}
+                  📅 <strong>Scheduling for:</strong> {new Date(formData.scheduledAt).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}
                   <br />
                   <span className="text-xs text-blue-400">Users will receive this notification at the scheduled time.</span>
                 </div>
@@ -1229,7 +1230,7 @@ export default function NotificationsPage() {
               {/* Info about scheduling */}
               {formData.scheduledAt && (
                 <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded text-blue-300 text-sm">
-                  📅 <strong>Scheduling for:</strong> {new Date(formData.scheduledAt).toLocaleString()}
+                  📅 <strong>Scheduling for:</strong> {new Date(formData.scheduledAt).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}
                   <br />
                   <span className="text-xs text-blue-400">Users will receive this notification at the scheduled time.</span>
                 </div>

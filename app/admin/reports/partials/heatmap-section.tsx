@@ -393,7 +393,7 @@ export default function HeatmapSection({ data: propData }: HeatmapSectionProps) 
                           </td>
                           <td className="py-2 px-4 text-[#7a6a4a]">
                             {new Date(order.createdAt).toLocaleDateString('en-PH', {
-                              month: 'short', day: 'numeric', year: 'numeric'
+                              month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Manila'
                             })}
                           </td>
                         </tr>

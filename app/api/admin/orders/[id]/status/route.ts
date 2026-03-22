@@ -62,6 +62,63 @@ export async function PATCH(
       // Non-critical, continue
     }
 
+    // Send push notification to customer (non-critical)
+    try {
+      const { data: order } = await supabase
+        .from('orders')
+        .select('user_id')
+        .eq('id', orderId)
+        .maybeSingle();
+
+      if (order?.user_id) {
+        const notifMap: Record<string, { type: string; title: string; body: string }> = {
+          Processing: {
+            type: 'pending_order',
+            title: '🔄 Order is Being Processed',
+            body: "We're preparing your order. We'll notify you when it ships.",
+          },
+          Shipped: {
+            type: 'pending_order',
+            title: '🚚 Your Order is On Its Way!',
+            body: 'Your order has been shipped. Track your delivery for updates.',
+          },
+          Delivered: {
+            type: 'successful_order',
+            title: '✅ Order Delivered!',
+            body: 'Your order has been delivered. Enjoy your purchase!',
+          },
+          Cancelled: {
+            type: 'cancelled_order',
+            title: '❌ Order Cancelled',
+            body: 'Your order has been cancelled. Contact support if you have questions.',
+          },
+          Refunded: {
+            type: 'cancelled_order',
+            title: '💸 Refund Processed',
+            body: 'Your refund has been processed. It may take a few days to reflect.',
+          },
+        };
+
+        const notif = notifMap[status];
+        if (notif) {
+          await supabase.from('notifications').insert({
+            user_id: order.user_id,
+            notification_type: notif.type,
+            title: notif.title,
+            body: notif.body,
+            is_read: false,
+            send_push_notification: true,
+            metadata: {
+              action: 'order-redirect',
+              order_id: orderId,
+            },
+          });
+        }
+      }
+    } catch {
+      // Non-critical, continue
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Status update error:', error);

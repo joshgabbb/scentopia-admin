@@ -62,6 +62,9 @@ interface Order {
   courierCode?: string;
   shippingFee?: number;
   estimatedDelivery?: string;
+  voucherCode?: string | null;
+  discountAmount?: number;
+  originalAmount?: number | null;
 }
 
 interface OrderDetailsProps {
@@ -80,10 +83,11 @@ const formatCurrency = (amount: number) => {
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('en-US', {
     month: 'long',
-    day: 'numeric', 
+    day: 'numeric',
     year: 'numeric',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
+    timeZone: 'Asia/Manila',
   });
 };
 
@@ -558,6 +562,7 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
                       ?? currentOrder.shippingFee
                       ?? null;
                     const total = currentOrder.amount;
+                    const discount = currentOrder.discountAmount ?? 0;
                     return (
                       <>
                         <div className="flex justify-between items-center text-sm">
@@ -570,6 +575,17 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
                             {deliveryFee != null ? formatCurrency(deliveryFee) : '—'}
                           </span>
                         </div>
+                        {discount > 0 && currentOrder.voucherCode && (
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-green-600 flex items-center gap-1">
+                              Voucher
+                              <span className="font-mono text-xs bg-green-50 border border-green-200 text-green-700 px-1.5 py-0.5 rounded">
+                                {currentOrder.voucherCode}
+                              </span>
+                            </span>
+                            <span className="text-green-600 font-medium">-{formatCurrency(discount)}</span>
+                          </div>
+                        )}
                         <div className="flex justify-between items-center font-semibold text-base pt-2 border-t border-[#e8e0d0]">
                           <span className="text-[#1c1810]">Total</span>
                           <span className="text-[#d4af37]">{formatCurrency(total)}</span>

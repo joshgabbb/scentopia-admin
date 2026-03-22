@@ -134,7 +134,7 @@ export default function FeedbackPage() {
                     <div className="max-w-xs truncate text-[#1c1810] text-sm">{item.description || "—"}</div>
                   </td>
                   <td className="px-6 py-4 text-sm text-[#7a6a4a]">
-                    {new Date(item.createdAt).toLocaleDateString()}
+                    {new Date(item.createdAt).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Manila" })}
                   </td>
                   <td className="px-6 py-4">
                     <button
@@ -186,7 +186,7 @@ export default function FeedbackPage() {
                 <div className="bg-[#faf8f3] border border-[#e8e0d0] p-4">
                   <h3 className="font-semibold text-[#d4af37] mb-2">Admin Reply</h3>
                   <p className="text-[#1c1810]">{selectedReview.adminResponse}</p>
-                  <p className="text-xs text-[#7a6a4a] mt-2">Replied: {new Date(selectedReview.respondedAt!).toLocaleString()}</p>
+                  <p className="text-xs text-[#7a6a4a] mt-2">Replied: {new Date(selectedReview.respondedAt!).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}</p>
                 </div>
               )}
               <div>

@@ -15,6 +15,9 @@ import {
   MoreHorizontal,
   Download,
   Plus,
+  Eye,
+  X,
+  Package,
 } from "lucide-react";
 import OrderDetails from "./order-details";
 import { exportReport, createOrdersExportConfig, type ExportFormat } from "@/lib/export-utils";
@@ -43,6 +46,9 @@ interface Order {
   customerName: string;
   customerEmail: string;
   amount: number;
+  voucherCode?: string | null;
+  discountAmount?: number;
+  originalAmount?: number | null;
   status: "Pending" | "Processing" | "Shipped" | "Delivered" | "Cancelled";
   createdAt: string;
   orderNumber: string;
@@ -90,6 +96,7 @@ const formatDate = (dateString: string) => {
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: "Asia/Manila",
   });
 };
 
@@ -172,6 +179,7 @@ function OrdersContent() {
   const [posCurrentPage, setPosCurrentPage] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isLoadingOrder, setIsLoadingOrder] = useState(false);
+  const [previewOrder, setPreviewOrder] = useState<Order | null>(null);
   // NEW: Add these states for modals and actions
   const [showSummary, setShowSummary] = useState(false);
   const [showFilterModal, setShowFilterModal] = useState(false);
@@ -1311,7 +1319,7 @@ const executeExport = () => {
                       <td className="px-6 py-4 text-sm text-[#7a6a4a]">
                         {new Date(tx.createdAt).toLocaleDateString('en-PH', {
                           year: 'numeric', month: 'short', day: 'numeric',
-                          hour: '2-digit', minute: '2-digit'
+                          hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila'
                         })}
                       </td>
                     </tr>
@@ -1411,6 +1419,9 @@ const executeExport = () => {
                     <ArrowUpDown className="inline w-3 h-3 ml-1 opacity-30" />
                   )}
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#7a6a4a] uppercase tracking-wider">
+                  Voucher
+                </th>
                 <th
                   className="px-6 py-3 text-left text-xs font-medium text-[#7a6a4a] uppercase tracking-wider cursor-pointer hover:bg-[#d4af37]/5"
                   onClick={() => handleSort("payment_status")}
@@ -1462,7 +1473,7 @@ const executeExport = () => {
               ) : displayOrders.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     className="px-6 py-12 text-center text-[#7a6a4a]"
                   >
                     No orders found
@@ -1497,6 +1508,22 @@ const executeExport = () => {
                         {formatCurrency(order.amount)}
                       </td>
                       <td className="px-6 py-4">
+                        {order.voucherCode ? (
+                          <div>
+                            <span className="inline-block px-2 py-0.5 text-xs font-mono font-semibold bg-[#d4af37]/10 text-[#8B6914] border border-[#d4af37]/30 rounded">
+                              {order.voucherCode}
+                            </span>
+                            {(order.discountAmount ?? 0) > 0 && (
+                              <div className="text-xs text-green-600 mt-0.5">
+                                -{formatCurrency(order.discountAmount!)}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-[#7a6a4a]">—</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
                         <span className={`px-2 py-1 text-xs font-medium rounded ${getStatusColor(order.payment?.paymentStatus?.toUpperCase() || "Unpaid")}`}>
                           {order.payment?.paymentStatus?.toUpperCase() || "UNPAID"}
                         </span>
@@ -1512,10 +1539,23 @@ const executeExport = () => {
                       <td className="px-6 py-4 text-sm text-[#7a6a4a]">
                         {formatDate(order.createdAt)}
                       </td>
-                      <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                        <button className="p-1 hover:bg-[#d4af37]/10 rounded transition-colors text-[#1c1810]">
-                          <MoreHorizontal className="w-5 h-5" />
-                        </button>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => setPreviewOrder(order)}
+                            className="p-1.5 text-[#9a8a6a] hover:text-[#8B6914] hover:bg-[#D4AF37]/10 rounded-sm transition-colors"
+                            title="Quick preview"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleOrderClick(order)}
+                            className="p-1.5 text-[#9a8a6a] hover:text-[#8B6914] hover:bg-[#D4AF37]/10 rounded-sm transition-colors"
+                            title="More details"
+                          >
+                            <MoreHorizontal className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1550,6 +1590,108 @@ const executeExport = () => {
           </div>
         )}
       </div>
+      )}
+
+      {/* Dropdown backdrop */}
+      {/* Order Preview Modal */}
+      {previewOrder && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setPreviewOrder(null); }}
+        >
+          <div className="bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-[#e8e0d0]">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#e8e0d0]">
+              <h2 className="text-base font-semibold text-[#1c1810]">Order Preview</h2>
+              <button onClick={() => setPreviewOrder(null)} className="p-1.5 rounded hover:bg-[#f2ede4] text-[#7a6a4a] transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              {/* Order number + customer */}
+              <div className="flex gap-5">
+                {/* Order icon placeholder */}
+                <div className="w-20 h-20 flex-shrink-0 rounded-lg border border-[#e8e0d0] bg-[#faf8f3] flex items-center justify-center">
+                  <FileText className="w-8 h-8 text-[#D4AF37]/60" />
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0 space-y-2">
+                  <div>
+                    <h3 className="text-lg font-semibold text-[#1c1810] leading-tight font-mono">{previewOrder.orderNumber}</h3>
+                    <p className="text-sm text-[#7a6a4a] mt-0.5">{previewOrder.customerName}</p>
+                    <p className="text-xs text-[#9a8a6a]">{previewOrder.customerEmail}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <span className={`px-2 py-0.5 text-xs font-medium rounded-full border ${getStatusColor(previewOrder.status)}`}>
+                      {previewOrder.status}
+                    </span>
+                    <span className={`px-2 py-0.5 text-xs font-medium rounded-full border ${getStatusColor(previewOrder.payment?.paymentStatus?.toUpperCase() || 'Unpaid')}`}>
+                      {(previewOrder.payment?.paymentStatus || 'Unpaid').toUpperCase()}
+                    </span>
+                    {previewOrder.payment?.paymentMethod && (
+                      <span className="px-2 py-0.5 text-xs font-medium rounded-full border bg-[#d4af37]/10 text-[#8B6914] border-[#d4af37]/30">
+                        {previewOrder.payment.paymentMethod.toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Items */}
+              {previewOrder.items && previewOrder.items.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-[#8B6914] uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                    <Package className="w-3.5 h-3.5" /> Items ({previewOrder.itemCount})
+                  </p>
+                  <div className="border border-[#e8e0d0] rounded-lg overflow-hidden">
+                    {previewOrder.items.map((item, i) => (
+                      <div key={i} className="flex justify-between items-center px-3 py-2.5 border-b border-[#e8e0d0] last:border-0 bg-[#faf8f3]">
+                        <div>
+                          <p className="text-sm text-[#1c1810] font-medium">{item.productName}</p>
+                          {item.size && <p className="text-xs text-[#9a8a6a]">{item.size}</p>}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-[#9a8a6a]">×{item.quantity}</p>
+                          <p className="text-sm font-semibold text-[#1c1810]">{formatCurrency(item.itemAmount)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Totals */}
+              <div>
+                <p className="text-xs font-semibold text-[#8B6914] uppercase tracking-wide mb-2">Summary</p>
+                <div className="border border-[#e8e0d0] rounded-lg px-4 py-3 bg-[#faf8f3] space-y-1.5">
+                  {previewOrder.voucherCode && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-green-600 flex items-center gap-1.5">
+                        Voucher
+                        <span className="font-mono text-xs bg-green-50 border border-green-200 text-green-700 px-1.5 py-0.5 rounded">
+                          {previewOrder.voucherCode}
+                        </span>
+                      </span>
+                      <span className="text-green-600 font-medium">-{formatCurrency(previewOrder.discountAmount || 0)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center pt-1 border-t border-[#e8e0d0]">
+                    <span className="text-sm font-semibold text-[#1c1810]">Total</span>
+                    <span className="text-base font-bold text-[#D4AF37]">{formatCurrency(previewOrder.amount)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer meta */}
+              <div className="pt-2 border-t border-[#e8e0d0] flex justify-between text-xs text-[#9a8a6a]">
+                <span>Placed on {formatDate(previewOrder.createdAt)}</span>
+                <span>{previewOrder.itemCount} item{previewOrder.itemCount !== 1 ? 's' : ''}</span>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

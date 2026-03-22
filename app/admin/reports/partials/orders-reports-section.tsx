@@ -165,6 +165,7 @@ export default function OrdersReportsSection() {
               month: "short",
               day: "numeric",
               year: "numeric",
+              timeZone: "Asia/Manila",
             })}
           </td>
         </tr>
@@ -190,6 +191,7 @@ export default function OrdersReportsSection() {
             month: "short",
             day: "numeric",
             year: "numeric",
+            timeZone: "Asia/Manila",
           })}
         </td>
       </tr>

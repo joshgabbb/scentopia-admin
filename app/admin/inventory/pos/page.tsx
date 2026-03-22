@@ -65,10 +65,10 @@ const PAYMENT_METHODS: {
 
 function buildReceiptHTML(transaction: CompletedTransaction): string {
   const date = new Date(transaction.createdAt).toLocaleDateString("en-PH", {
-    year: "numeric", month: "long", day: "numeric",
+    year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Manila",
   });
   const time = new Date(transaction.createdAt).toLocaleTimeString("en-PH", {
-    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "Asia/Manila",
   });
 
   const itemRows = transaction.items.map((item) => `
@@ -285,10 +285,10 @@ function ReceiptModal({
   };
 
   const date = new Date(transaction.createdAt).toLocaleDateString("en-PH", {
-    year: "numeric", month: "short", day: "numeric",
+    year: "numeric", month: "short", day: "numeric", timeZone: "Asia/Manila",
   });
   const time = new Date(transaction.createdAt).toLocaleTimeString("en-PH", {
-    hour: "2-digit", minute: "2-digit",
+    hour: "2-digit", minute: "2-digit", timeZone: "Asia/Manila",
   });
 
   return (

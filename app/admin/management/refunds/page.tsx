@@ -59,7 +59,7 @@ function StatusBadge({ status }: { status: string }) {
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-PH", {
     year: "numeric", month: "short", day: "numeric",
-    hour: "2-digit", minute: "2-digit",
+    hour: "2-digit", minute: "2-digit", timeZone: "Asia/Manila",
   });
 }
 
@@ -112,6 +112,10 @@ export default function RefundsPage() {
 
   const handleAction = async () => {
     if (!actionModal) return;
+    if (actionModal.action === "decline" && !adminNote.trim()) {
+      showToast("error", "A decline reason is required.");
+      return;
+    }
     setIsProcessing(true);
     try {
       const res = await fetch("/api/admin/refunds", {
@@ -611,17 +615,27 @@ export default function RefundsPage() {
 
               <div>
                 <label className={`block text-xs font-semibold uppercase tracking-wider ${themeClasses.textMuted} mb-1.5`}>
-                  Admin Note <span className="normal-case font-normal">(optional)</span>
+                  {actionModal.action === "decline"
+                    ? <span>Decline Reason <span className="normal-case font-normal text-red-500">(required)</span></span>
+                    : <span>Admin Note <span className="normal-case font-normal">(optional)</span></span>
+                  }
                 </label>
                 <textarea
                   value={adminNote}
                   onChange={e => setAdminNote(e.target.value)}
                   placeholder={actionModal.action === "approve"
                     ? "e.g. Refund approved after review"
-                    : "e.g. No proof of damage provided"}
+                    : "e.g. Item was not defective based on submitted evidence"}
                   rows={3}
-                  className={`w-full px-3 py-2 text-sm ${themeClasses.inputBg} border ${themeClasses.border} ${themeClasses.text} rounded-sm resize-none focus:outline-none focus:ring-1 focus:ring-[#D4AF37] focus:border-[#D4AF37] placeholder:${themeClasses.textMuted}`}
+                  className={`w-full px-3 py-2 text-sm ${themeClasses.inputBg} border ${
+                    actionModal.action === "decline" && !adminNote.trim()
+                      ? "border-red-300 focus:ring-red-400 focus:border-red-400"
+                      : `${themeClasses.border} focus:ring-[#D4AF37] focus:border-[#D4AF37]`
+                  } ${themeClasses.text} rounded-sm resize-none focus:outline-none focus:ring-1 placeholder:${themeClasses.textMuted}`}
                 />
+                {actionModal.action === "decline" && !adminNote.trim() && (
+                  <p className="text-xs text-red-500 mt-1">This reason will be included in the email sent to the customer.</p>
+                )}
               </div>
             </div>
 
@@ -635,7 +649,7 @@ export default function RefundsPage() {
               </button>
               <button
                 onClick={handleAction}
-                disabled={isProcessing}
+                disabled={isProcessing || (actionModal.action === "decline" && !adminNote.trim())}
                 className={`px-4 py-2 text-sm font-medium rounded-sm transition-colors disabled:opacity-50 flex items-center gap-2
                   ${actionModal.action === "approve"
                     ? "bg-[#D4AF37] text-white hover:bg-[#c49b28]"
