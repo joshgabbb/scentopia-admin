@@ -9,19 +9,22 @@ import { exportReport, type ExportConfig } from "@/lib/export-utils";
 
 interface StockMovement {
   id: string;
+  source: "stock" | "purchase";
   productId: string;
   productName: string;
   productImage: string | null;
   size: string;
-  type: "IN" | "OUT";
+  type: "IN" | "OUT" | "PURCHASE";
   quantity: number;
-  previousStock: number;
-  newStock: number;
+  previousStock: number | null;
+  newStock: number | null;
   reason: string | null;
   remarks: string | null;
   createdBy: string | null;
   createdByName: string | null;
   createdAt: string;
+  orderId: string | null;
+  customerName: string | null;
 }
 
 interface Product {
@@ -141,7 +144,7 @@ export default function StockHistoryPage() {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [filterProduct, setFilterProduct] = useState("");
-  const [filterType, setFilterType] = useState<"all" | "IN" | "OUT">("all");
+  const [filterType, setFilterType] = useState<"all" | "IN" | "OUT" | "PURCHASE">("all");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
   const [activePreset, setActivePreset] = useState<string | null>(null);
@@ -191,7 +194,7 @@ export default function StockHistoryPage() {
 
   const handleClearFilters = () => {
     setFilterProduct("");
-    setFilterType("all");
+    setFilterType("all" as const);
     setFilterDateFrom("");
     setFilterDateTo("");
     setActivePreset(null);
@@ -373,58 +376,62 @@ export default function StockHistoryPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Product filter */}
-          <select
-            value={filterProduct}
-            onChange={e => setFilterProduct(e.target.value)}
-            className="p-2.5 bg-[#faf8f3] border border-[#e8e0d0] rounded-lg text-sm text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
-          >
-            <option value="">All Products</option>
-            {products.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
+          <div>
+            <label className="block text-xs text-[#7a6a4a] mb-1">Product</label>
+            <select
+              value={filterProduct}
+              onChange={e => setFilterProduct(e.target.value)}
+              className="w-full p-2.5 bg-[#faf8f3] border border-[#e8e0d0] rounded-lg text-sm text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+            >
+              <option value="">All Products</option>
+              {products.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
 
-          {/* Type toggle — auto-applies on click */}
-          <div className="flex rounded-lg border border-[#e8e0d0] overflow-hidden h-[42px]">
-            {(["all", "IN", "OUT"] as const).map(t => (
-              <button
-                key={t}
-                onClick={() => setFilterType(t)}
-                className={`flex-1 text-xs font-semibold uppercase transition-colors ${
-                  filterType === t
-                    ? "bg-[#d4af37] text-[#0a0a0a]"
-                    : "bg-[#faf8f3] text-[#7a6a4a] hover:bg-[#f2ede4]"
-                }`}
-              >
-                {t === "all" ? "All" : t}
-              </button>
-            ))}
+          {/* Type toggle */}
+          <div>
+            <label className="block text-xs text-[#7a6a4a] mb-1">Type</label>
+            <div className="flex rounded-lg border border-[#e8e0d0] overflow-hidden h-[42px]">
+              {(["all", "IN", "OUT", "PURCHASE"] as const).map(t => (
+                <button
+                  key={t}
+                  onClick={() => setFilterType(t)}
+                  className={`flex-1 text-xs font-semibold uppercase transition-colors ${
+                    filterType === t
+                      ? t === "PURCHASE"
+                        ? "bg-blue-500 text-white"
+                        : "bg-[#d4af37] text-[#0a0a0a]"
+                      : "bg-[#faf8f3] text-[#7a6a4a] hover:bg-[#f2ede4]"
+                  }`}
+                >
+                  {t === "all" ? "All" : t === "PURCHASE" ? "Sale" : t}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Date from */}
-          <div className="relative">
+          <div>
+            <label className="block text-xs text-[#7a6a4a] mb-1">From date</label>
             <input
               type="date"
               value={filterDateFrom}
               onChange={e => { setFilterDateFrom(e.target.value); setActivePreset(null); }}
               className="w-full p-2.5 bg-[#faf8f3] border border-[#e8e0d0] rounded-lg text-sm text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
             />
-            {!filterDateFrom && (
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#b0a080] pointer-events-none">From date</span>
-            )}
           </div>
 
           {/* Date to */}
-          <div className="relative">
+          <div>
+            <label className="block text-xs text-[#7a6a4a] mb-1">To date</label>
             <input
               type="date"
               value={filterDateTo}
               onChange={e => { setFilterDateTo(e.target.value); setActivePreset(null); }}
               className="w-full p-2.5 bg-[#faf8f3] border border-[#e8e0d0] rounded-lg text-sm text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
             />
-            {!filterDateTo && (
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#b0a080] pointer-events-none">To date</span>
-            )}
           </div>
         </div>
 
@@ -491,19 +498,27 @@ export default function StockHistoryPage() {
                       <span className={`inline-flex px-2.5 py-1 text-xs font-bold rounded-full ${
                         m.type === "IN"
                           ? "bg-green-100 text-green-700 border border-green-200"
+                          : m.type === "PURCHASE"
+                          ? "bg-blue-100 text-blue-700 border border-blue-200"
                           : "bg-red-100 text-red-600 border border-red-200"
                       }`}>
-                        {m.type}
+                        {m.type === "PURCHASE" ? "SALE" : m.type}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-[#1c1810]">{m.quantity}</td>
-                    <td className="px-4 py-3 text-right text-[#7a6a4a]">{m.previousStock}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-[#d4af37]">{m.newStock}</td>
-                    <td className="px-4 py-3 text-[#7a6a4a] whitespace-nowrap">{m.reason || "—"}</td>
+                    <td className="px-4 py-3 text-right text-[#7a6a4a]">{m.previousStock ?? "—"}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-[#d4af37]">{m.newStock ?? "—"}</td>
+                    <td className="px-4 py-3 text-[#7a6a4a] whitespace-nowrap text-xs">{m.reason || "—"}</td>
                     <td className="px-4 py-3 text-[#7a6a4a] max-w-[140px]">
                       <span className="truncate block" title={m.remarks || undefined}>{m.remarks || "—"}</span>
                     </td>
-                    <td className="px-4 py-3 text-[#7a6a4a] whitespace-nowrap text-xs">{m.createdByName || "—"}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-xs">
+                      {m.source === "purchase" ? (
+                        <span className="text-blue-600 font-medium">{m.customerName || "Customer"}</span>
+                      ) : (
+                        <span className="text-[#7a6a4a]">{m.createdByName || "—"}</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

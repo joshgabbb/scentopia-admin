@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 
 const ITEMS_PER_PAGE = 20;
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     const searchParams = request.nextUrl.searchParams;
     const page = parseInt(searchParams.get("page") || "1");
     const search = searchParams.get("search") || "";
@@ -47,22 +47,27 @@ export async function GET(request: NextRequest) {
     // Batch fetch profiles for non-anon reviews
     const userIds = [...new Set(reviewRows.filter(r => !r.is_anon && r.user_id).map(r => r.user_id))];
     const { data: profiles } = userIds.length > 0
-      ? await supabase.from('profiles').select('id, full_name').in('id', userIds)
+      ? await supabase.from('profiles').select('id, first_name, last_name').in('id', userIds)
       : { data: [] };
 
     // Build lookup maps
     const orderItemMap = new Map((orderItems || []).map(oi => [oi.id, oi]));
     const productMap = new Map((products || []).map(p => [p.id, p]));
-    const profileMap = new Map((profiles || []).map(p => [p.id, p]));
+    const profileMap = new Map(
+      (profiles || []).map((p: { id: string; first_name: string | null; last_name: string | null }) => [
+        p.id,
+        [p.first_name, p.last_name].filter(Boolean).join(" ") || "Customer",
+      ])
+    );
 
     const reviews = reviewRows.map(r => {
       const orderItem = orderItemMap.get(r.order_item_id);
       const product = orderItem ? productMap.get(orderItem.product_id) : null;
-      const profile = !r.is_anon ? profileMap.get(r.user_id) : null;
+      const customerName: string = r.is_anon ? "Anonymous" : ((profileMap.get(r.user_id) as string) ?? "Customer");
 
       return {
         id: r.id,
-        customerName: profile?.full_name || "Anonymous",
+        customerName,
         productName: product?.name || "Unknown Product",
         rating: r.rating,
         description: r.description,

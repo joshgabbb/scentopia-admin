@@ -1,246 +1,221 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
+
+const GRACE_DAYS = 3; // Auto-complete 3 days after estimated delivery (or shipping date)
 
 /**
- * POST /api/admin/orders/auto-complete
- *
- * Manually triggers the auto-completion check for shipped orders
- * that are past their expected delivery date + 7 days.
- *
- * This endpoint can be called:
- * 1. Manually from the admin dashboard
- * 2. Via external cron service (like cron-job.org)
- * 3. As a scheduled Edge Function
+ * Shared logic: find and complete overdue shipped orders.
+ * - Primary: orders where estimated_delivery + 3 days has passed
+ * - Fallback: orders with no estimated_delivery where updated_at + 3 days has passed
+ *   (updated_at is set to the time the order was marked Shipped)
  */
-export async function POST(request: NextRequest) {
-  try {
-    const supabase = await createClient();
+async function runAutoComplete() {
+  const supabase = createAdminClient();
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - GRACE_DAYS);
+  const cutoffISO = cutoff.toISOString();
 
-    // Check authentication (optional for cron jobs with API key)
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
+  // Fetch all shipped orders (with or without estimated_delivery)
+  const { data: orders, error: fetchError } = await supabase
+    .from('orders')
+    .select('id, user_id, estimated_delivery, updated_at, delivery_location')
+    .eq('order_status', 'Shipped');
 
-    // If CRON_SECRET is set, allow unauthenticated access with correct secret
-    if (cronSecret && authHeader === `Bearer ${cronSecret}`) {
-      // Authorized via cron secret
-    } else {
-      // Check for authenticated user
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) {
-        return NextResponse.json(
-          { success: false, error: 'Unauthorized' },
-          { status: 401 }
-        );
-      }
-    }
-
-    // Call the Supabase RPC function
-    const { data, error } = await supabase.rpc('check_auto_delivery');
-
-    if (error) {
-      console.error('Error running auto-delivery check:', error);
-
-      // If the function doesn't exist, run the check manually
-      if (error.message.includes('does not exist')) {
-        return await runManualAutoComplete(supabase);
-      }
-
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      data,
-      message: 'Auto-delivery check completed successfully'
-    });
-
-  } catch (error) {
-    console.error('Error in auto-complete endpoint:', error);
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Internal server error' },
-      { status: 500 }
-    );
+  if (fetchError) throw fetchError;
+  if (!orders || orders.length === 0) {
+    return { orders_completed: 0 };
   }
-}
 
-/**
- * Manual implementation of auto-complete logic
- * Used if the Supabase function doesn't exist
- */
-async function runManualAutoComplete(supabase: any) {
-  try {
-    // Find shipped orders past their auto-complete date
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  // Filter: complete if (estimated_delivery || updated_at) + 3 days has passed
+  const toComplete = orders.filter((order: any) => {
+    const referenceDate = order.estimated_delivery || order.updated_at;
+    if (!referenceDate) return false;
+    return new Date(referenceDate) <= cutoff;
+  });
 
-    const { data: orders, error: fetchError } = await supabase
-      .from('orders')
-      .select('id, user_id, waybill_number')
-      .eq('order_status', 'Shipped')
-      .not('estimated_delivery', 'is', null)
-      .lt('estimated_delivery', sevenDaysAgo.toISOString());
+  if (toComplete.length === 0) {
+    return { orders_completed: 0 };
+  }
 
-    if (fetchError) {
-      throw fetchError;
-    }
+  let completedCount = 0;
+  const now = new Date().toISOString();
 
-    if (!orders || orders.length === 0) {
-      return NextResponse.json({
-        success: true,
-        data: { orders_completed: 0 },
-        message: 'No orders to auto-complete'
-      });
-    }
+  for (const order of toComplete) {
+    try {
+      const usedFallback = !order.estimated_delivery;
 
-    let completedCount = 0;
+      // Update order: mark delivered, set delivered_at timestamp
+      await supabase
+        .from('orders')
+        .update({
+          order_status: 'Delivered',
+          delivered_at: now,
+          updated_at: now,
+        })
+        .eq('id', order.id);
 
-    for (const order of orders) {
+      // Add tracking entry
       try {
-        // Update order status
-        await supabase
-          .from('orders')
-          .update({
-            order_status: 'Delivered',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', order.id);
-
-        // Create tracking entry
-        await supabase
-          .from('order_tracking')
-          .insert({
-            order_id: order.id,
-            order_status: 'Delivered',
-            title: 'Order Auto-Completed',
-            body: 'Order was automatically marked as delivered after 7 days past expected delivery date.'
-          });
-
-        // Try to create notification (optional)
-        try {
-          await supabase
-            .from('notifications')
-            .insert({
-              user_id: order.user_id,
-              title: 'Order Completed',
-              body: 'Your order has been automatically marked as delivered.',
-              type: 'order_update',
-              data: {
-                order_id: order.id,
-                waybill_number: order.waybill_number,
-                auto_completed: true
-              }
-            });
-        } catch (notifError) {
-          // Notification is optional
-          console.log('Notification creation skipped:', notifError);
-        }
-
-        completedCount++;
-      } catch (orderError) {
-        console.error(`Error completing order ${order.id}:`, orderError);
+        await supabase.from('order_tracking').insert({
+          order_id: order.id,
+          order_status: 'Delivered',
+          title: 'Order Delivered',
+          body: usedFallback
+            ? `Your order has been automatically marked as delivered (${GRACE_DAYS} days after shipment).`
+            : `Your order has been automatically marked as delivered (${GRACE_DAYS} days after expected delivery).`,
+        });
+      } catch {
+        // Non-critical
       }
+
+      // Notify customer
+      try {
+        await supabase.from('notifications').insert({
+          user_id: order.user_id,
+          title: 'Order Delivered',
+          body: `Your order has been marked as delivered. Thank you for shopping with Scentopia!`,
+          type: 'order_update',
+          data: {
+            order_id: order.id,
+            auto_completed: true,
+          },
+        });
+      } catch {
+        // Non-critical
+      }
+
+      completedCount++;
+    } catch (err) {
+      console.error(`Auto-complete failed for order ${order.id}:`, err);
     }
-
-    return NextResponse.json({
-      success: true,
-      data: { orders_completed: completedCount },
-      message: `Auto-completed ${completedCount} orders`
-    });
-
-  } catch (error) {
-    console.error('Error in manual auto-complete:', error);
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Manual auto-complete failed' },
-      { status: 500 }
-    );
   }
+
+  return { orders_completed: completedCount };
 }
 
 /**
  * GET /api/admin/orders/auto-complete
  *
- * Returns orders that are pending auto-completion
+ * Vercel cron hits this endpoint daily.
+ * Also returns a preview of orders pending auto-completion for the admin UI.
  */
 export async function GET(request: NextRequest) {
-  try {
-    const supabase = await createClient();
+  const authHeader = request.headers.get('authorization');
+  const cronSecret = process.env.CRON_SECRET;
+  const isCron = cronSecret && authHeader === `Bearer ${cronSecret}`;
 
-    // Check authentication
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+  // If called by Vercel cron, run the job
+  if (isCron) {
+    try {
+      const result = await runAutoComplete();
+      return NextResponse.json({
+        success: true,
+        data: result,
+        message: `Auto-completed ${result.orders_completed} orders`,
+      });
+    } catch (error) {
+      console.error('Cron auto-complete error:', error);
       return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
+        { success: false, error: error instanceof Error ? error.message : 'Auto-complete failed' },
+        { status: 500 }
       );
     }
+  }
 
-    // Calculate the cutoff date (7 days from now)
-    const autoCompleteDate = new Date();
-    autoCompleteDate.setDate(autoCompleteDate.getDate() + 7);
+  // Otherwise: admin UI preview — list shipped orders with countdown
+  try {
+    const supabase = createAdminClient();
 
-    // Find shipped orders with estimated_delivery
     const { data: orders, error } = await supabase
       .from('orders')
       .select(`
         id,
         user_id,
-        waybill_number,
-        courier_code,
         order_status,
         estimated_delivery,
-        shipping_fee,
-        amount,
-        created_at,
-        profiles!orders_user_id_fkey (
-          id,
-          first_name,
-          last_name,
-          email
-        )
+        updated_at,
+        delivery_location,
+        amount
       `)
       .eq('order_status', 'Shipped')
-      .not('estimated_delivery', 'is', null)
       .order('estimated_delivery', { ascending: true });
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
-    // Calculate auto-complete date and days until auto-complete for each order
-    const ordersWithAutoCompleteInfo = (orders || []).map((order: any) => {
-      const estimatedDelivery = new Date(order.estimated_delivery);
-      const autoCompleteAt = new Date(estimatedDelivery);
-      autoCompleteAt.setDate(autoCompleteAt.getDate() + 7);
+    const now = new Date();
 
-      const now = new Date();
-      const daysUntilAutoComplete = Math.ceil((autoCompleteAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    const enriched = (orders || []).map((order: any) => {
+      const referenceDate = order.estimated_delivery || order.updated_at;
+      const autoCompleteAt = referenceDate
+        ? new Date(new Date(referenceDate).getTime() + GRACE_DAYS * 24 * 60 * 60 * 1000)
+        : null;
+
+      const daysLeft = autoCompleteAt
+        ? Math.ceil((autoCompleteAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+        : null;
 
       return {
-        ...order,
-        auto_complete_date: autoCompleteAt.toISOString(),
-        days_until_auto_complete: daysUntilAutoComplete,
-        is_overdue: daysUntilAutoComplete < 0,
-        customer_name: order.profiles ? `${order.profiles.first_name || ''} ${order.profiles.last_name || ''}`.trim() : 'Unknown',
-        customer_email: order.profiles?.email
+        id: order.id,
+        amount: order.amount,
+        estimated_delivery: order.estimated_delivery,
+        auto_complete_at: autoCompleteAt?.toISOString() ?? null,
+        days_until_auto_complete: daysLeft,
+        is_overdue: daysLeft !== null && daysLeft <= 0,
+        used_fallback: !order.estimated_delivery,
       };
     });
 
     return NextResponse.json({
       success: true,
       data: {
-        orders: ordersWithAutoCompleteInfo,
-        total: ordersWithAutoCompleteInfo.length,
-        overdue_count: ordersWithAutoCompleteInfo.filter((o: any) => o.is_overdue).length
-      }
+        orders: enriched,
+        total: enriched.length,
+        overdue_count: enriched.filter((o: any) => o.is_overdue).length,
+        grace_days: GRACE_DAYS,
+      },
     });
-
   } catch (error) {
-    console.error('Error fetching pending auto-complete orders:', error);
+    console.error('Error fetching auto-complete preview:', error);
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST /api/admin/orders/auto-complete
+ *
+ * Manual trigger from admin dashboard or external cron service.
+ */
+export async function POST(request: NextRequest) {
+  // Auth: accept CRON_SECRET Bearer token OR authenticated admin session
+  const authHeader = request.headers.get('authorization');
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (!(cronSecret && authHeader === `Bearer ${cronSecret}`)) {
+    const supabase = createAdminClient();
+    // For POST from admin UI, verify the user is logged in via cookie session
+    const anonClient = await import('@/lib/supabase/server').then(m => m.createClient());
+    const { data: { user }, error } = await (anonClient as any).auth.getUser();
+    if (error || !user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+  }
+
+  try {
+    const result = await runAutoComplete();
+    return NextResponse.json({
+      success: true,
+      data: result,
+      message: result.orders_completed > 0
+        ? `Auto-completed ${result.orders_completed} order(s)`
+        : 'No orders needed auto-completion',
+    });
+  } catch (error) {
+    console.error('Manual auto-complete error:', error);
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : 'Auto-complete failed' },
       { status: 500 }
     );
   }

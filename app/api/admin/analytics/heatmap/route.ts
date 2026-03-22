@@ -107,14 +107,12 @@ export async function GET() {
     const supabase = await createClient();
     const { data: orders, error } = await supabase
       .from("orders")
-      .select("delivery_location")
-      .not("delivery_location", "is", null);
+      .select("delivery_location, delivery_snapshot, addresses(latitude, longitude)")
+      .neq("order_status", "Cancelled");
 
     if (error) {
       throw error;
     }
-
-    console.log("Fetched orders:", orders);
 
     const provinceCount: Record<string, number> = {};
 
@@ -122,32 +120,51 @@ export async function GET() {
       let lat: number | null = null;
       let lng: number | null = null;
 
-      const coords = order.delivery_location?.coordinates;
+      // Priority 1: province code in delivery_location (mobile app format)
+      const loc = order.delivery_location;
+      if (loc?.province?.code) {
+        const code = loc.province.code;
+        provinceCount[code] = (provinceCount[code] || 0) + 1;
+        return;
+      }
 
-      if (Array.isArray(coords?.coordinates) && coords.coordinates.length === 2) {
-        // GeoJSON format: [lng, lat]
-        [lng, lat] = coords.coordinates;
-      } else if (
-        typeof coords?.lat === "number" &&
-        typeof coords?.lng === "number"
-      ) {
-        // Simple {lat, lng} object
-        lat = coords.lat;
-        lng = coords.lng;
+      // Priority 2: coordinates from delivery_location
+      if (typeof loc?.latitude === "number" && typeof loc?.longitude === "number") {
+        lat = loc.latitude;
+        lng = loc.longitude;
+      } else if (loc?.coordinates) {
+        const coords = loc.coordinates;
+        if (Array.isArray(coords?.coordinates) && coords.coordinates.length === 2) {
+          [lng, lat] = coords.coordinates;
+        } else if (typeof coords?.lat === "number" && typeof coords?.lng === "number") {
+          lat = coords.lat;
+          lng = coords.lng;
+        }
+      }
+
+      // Priority 3: delivery_snapshot (same structure as delivery_location)
+      if (lat === null || lng === null) {
+        const snap = order.delivery_snapshot;
+        if (typeof snap?.latitude === "number" && typeof snap?.longitude === "number") {
+          lat = snap.latitude;
+          lng = snap.longitude;
+        }
+      }
+
+      // Priority 4: joined addresses table (address_id FK)
+      if (lat === null || lng === null) {
+        const addr = order.addresses as { latitude?: number; longitude?: number } | null;
+        if (typeof addr?.latitude === "number" && typeof addr?.longitude === "number") {
+          lat = addr.latitude;
+          lng = addr.longitude;
+        }
       }
 
       if (lat !== null && lng !== null) {
         const province = getProvinceFromCoordinates(lat, lng);
-
-        console.log(
-          `Order coordinates: (${lat}, ${lng}) mapped to province: ${province}`
-        );
-
         if (province) {
           provinceCount[province] = (provinceCount[province] || 0) + 1;
         }
-      } else {
-        console.log("Order missing valid coordinates:", order);
       }
     });
 

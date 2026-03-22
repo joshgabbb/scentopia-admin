@@ -35,6 +35,7 @@ import {
   ClipboardList,
   RefreshCw,
   X as XIcon,
+  RotateCcw,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import logo from "@/public/assets/images/general/stp-transparent-logo-light.png";
@@ -89,6 +90,7 @@ const menuItems: MenuItem[] = [
       { id: "feedback", label: "Feedback", icon: MessageSquare },
       { id: "notifications", label: "Notifications", icon: Bell },
       { id: "inventory-alerts", label: "Inventory Alerts", icon: AlertTriangle },
+      { id: "refunds", label: "Refunds", icon: RotateCcw },
     ],
   },
   {
@@ -125,6 +127,13 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const [bellAlerts,   setBellAlerts]   = useState<BellAlert[]>([]);
   const [toasts,       setToasts]       = useState<{ id: string; title: string; body: string }[]>([]);
   const toastShownRef = useRef(false);
+
+  // ── Refund alert bell ─────────────────────────────────────────────────
+  type RefundBellItem = { id: string; orderId: string; userName: string; reason: string; amount: number; createdAt: string };
+  const [refundBellCount,   setRefundBellCount]   = useState(0);
+  const [refundBellItems,   setRefundBellItems]   = useState<RefundBellItem[]>([]);
+  const [isRefundBellOpen,  setIsRefundBellOpen]  = useState(false);
+  const refundBellRef = useRef<HTMLDivElement>(null);
 
   const fetchBellAlerts = useCallback(async () => {
     try {
@@ -164,6 +173,23 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval);
   }, [fetchBellAlerts]);
 
+  const fetchRefundBell = useCallback(async () => {
+    try {
+      const res    = await fetch("/api/admin/refunds/bell");
+      const result = await res.json();
+      setRefundBellCount(result.count ?? 0);
+      setRefundBellItems(result.refunds ?? []);
+    } catch {
+      // silent
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRefundBell();
+    const interval = setInterval(fetchRefundBell, 60_000);
+    return () => clearInterval(interval);
+  }, [fetchRefundBell]);
+
   // Account settings form
   const [accountForm, setAccountForm] = useState({
     firstName: '',
@@ -176,6 +202,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
 
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
+  // refundBellRef declared above with state
 
   // Fetch user data
   useEffect(() => {
@@ -232,6 +259,9 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
       if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
         setIsNotificationsOpen(false);
       }
+      if (refundBellRef.current && !refundBellRef.current.contains(event.target as Node)) {
+        setIsRefundBellOpen(false);
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -244,6 +274,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
       if (event.key === 'Escape') {
         setIsUserMenuOpen(false);
         setIsNotificationsOpen(false);
+        setIsRefundBellOpen(false);
         setShowAccountSettings(false);
       }
     };
@@ -594,12 +625,96 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                 {/* Theme Toggle */}
                 <ThemeSwitcher />
 
+                {/* Refund Alert Bell */}
+                <div className="relative" ref={refundBellRef}>
+                  <button
+                    onClick={() => {
+                      setIsRefundBellOpen(!isRefundBellOpen);
+                      setIsNotificationsOpen(false);
+                      setIsUserMenuOpen(false);
+                    }}
+                    className={`relative p-2 ${themeClasses.hoverBg} transition-colors duration-150 rounded-md active:scale-95 ${themeClasses.text}`}
+                    title="Refund requests"
+                  >
+                    <RotateCcw className="w-5 h-5" />
+                    {refundBellCount > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 flex items-center justify-center rounded-full text-[10px] font-bold text-white leading-none bg-blue-500">
+                        {refundBellCount > 99 ? "99+" : refundBellCount}
+                      </span>
+                    )}
+                  </button>
+
+                  {isRefundBellOpen && (
+                    <div className={`absolute right-0 mt-2 w-80 ${themeClasses.bgSecondary} border ${themeClasses.border} shadow-xl z-50`}>
+                      <div className={`px-4 py-3 border-b ${themeClasses.border} flex items-center justify-between`}>
+                        <h3 className={`text-sm font-semibold ${themeClasses.accent}`}>Refund Requests</h3>
+                        {refundBellCount > 0 && (
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                            {refundBellCount} pending
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="max-h-72 overflow-y-auto">
+                        {refundBellItems.length === 0 ? (
+                          <div className="px-4 py-8 text-center">
+                            <RotateCcw className={`w-8 h-8 mx-auto mb-2 ${themeClasses.textMuted} opacity-40`} />
+                            <p className={`text-sm ${themeClasses.textMuted}`}>No pending refund requests</p>
+                          </div>
+                        ) : (
+                          refundBellItems.map((item) => (
+                            <button
+                              key={item.id}
+                              onClick={() => {
+                                router.push("/admin/management/refunds");
+                                setIsRefundBellOpen(false);
+                              }}
+                              className={`w-full text-left px-4 py-3 bg-transparent hover:bg-[#f5f0e8] border-b ${themeClasses.border} last:border-b-0 transition-colors`}
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                  <RotateCcw className="w-4 h-4 text-blue-600" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className={`text-sm font-medium ${themeClasses.text} truncate`}>{item.userName}</p>
+                                  <p className="text-xs text-[#7a6a4a] mt-0.5 truncate">{item.reason}</p>
+                                  <p className="text-xs font-semibold text-[#8B6914] mt-0.5">₱{item.amount.toFixed(2)}</p>
+                                </div>
+                              </div>
+                            </button>
+                          ))
+                        )}
+                      </div>
+
+                      <div className={`px-4 py-3 border-t ${themeClasses.border} flex items-center gap-2`}>
+                        <button
+                          onClick={() => {
+                            router.push("/admin/management/refunds");
+                            setIsRefundBellOpen(false);
+                          }}
+                          className={`flex-1 text-sm ${themeClasses.accent} hover:opacity-80 text-center font-medium`}
+                        >
+                          View all refunds
+                        </button>
+                        <button
+                          onClick={() => { fetchRefundBell(); setIsRefundBellOpen(false); }}
+                          className={`p-1.5 ${themeClasses.textMuted} hover:${themeClasses.text} transition-colors`}
+                          title="Refresh"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Inventory Alert Bell — real data from /api/admin/alerts/bell */}
                 <div className="relative" ref={notificationsRef}>
                   <button
                     onClick={() => {
                       setIsNotificationsOpen(!isNotificationsOpen);
                       setIsUserMenuOpen(false);
+                      setIsRefundBellOpen(false);
                     }}
                     className={`relative p-2 ${themeClasses.hoverBg} transition-colors duration-150 rounded-md active:scale-95 ${themeClasses.text}`}
                     title="Inventory alerts"
@@ -684,6 +799,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                     onClick={() => {
                       setIsUserMenuOpen(!isUserMenuOpen);
                       setIsNotificationsOpen(false);
+                      setIsRefundBellOpen(false);
                     }}
                     className={`w-8 h-8 ${themeClasses.accentBg} rounded-full flex items-center justify-center hover:opacity-80 transition-all duration-150 cursor-pointer active:scale-95`}
                   >

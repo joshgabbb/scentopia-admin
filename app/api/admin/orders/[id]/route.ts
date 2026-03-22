@@ -116,6 +116,21 @@ export async function GET(
     const deliveryLocation = order.delivery_location as {
       address?: string;
       full_address?: string;
+      shipping_fee?: number;
+      // Mobile stores structured fields inside delivery_snapshot
+      delivery_snapshot?: {
+        full_address?: string;
+        recipient_name?: string;
+        recipient_phone?: string;
+        street_address?: string;
+        barangay?: string;
+        city_municipality?: string;
+        province?: string;
+        region?: string;
+        postal_code?: string;
+        landmark?: string;
+      };
+      // Legacy flat fields
       recipient_name?: string;
       phone_number?: string;
       region?: { code?: string; name?: string };
@@ -127,7 +142,17 @@ export async function GET(
       landmarks?: string;
       latitude?: number;
       longitude?: number;
+      courier_info?: {
+        waybill_number?: string;
+        courier_code?: string;
+        courier_name?: string;
+        shipping_fee?: number;
+        estimated_delivery?: string;
+      };
     } | null;
+
+    // Convenience: snapshot fields (mobile's preferred format)
+    const snap = deliveryLocation?.delivery_snapshot;
 
     const itemCount = order.order_items?.reduce((sum: number, item: any) => {
       return sum + (Number(item.quantity) || 0);
@@ -155,15 +180,16 @@ export async function GET(
       created_at: track.created_at
     })) || [];
 
-    // Build delivery address string from delivery_location or fallback to profile address
-    const deliveryAddressString = deliveryLocation?.full_address
+    // Build delivery address string — prefer snapshot (mobile format), then legacy
+    const deliveryAddressString = snap?.full_address
+      || deliveryLocation?.full_address
       || deliveryLocation?.address
       || [
-          deliveryLocation?.street_address,
-          deliveryLocation?.barangay?.name,
-          deliveryLocation?.city?.name,
-          deliveryLocation?.province?.name,
-          deliveryLocation?.region?.name
+          snap?.street_address || deliveryLocation?.street_address,
+          snap?.barangay || (deliveryLocation?.barangay as any)?.name || (deliveryLocation?.barangay as any),
+          snap?.city_municipality || (deliveryLocation?.city as any)?.name || (deliveryLocation?.city as any),
+          snap?.province || (deliveryLocation?.province as any)?.name || (deliveryLocation?.province as any),
+          snap?.region || (deliveryLocation?.region as any)?.name || (deliveryLocation?.region as any),
         ].filter(Boolean).join(', ')
       || customerAddress;
 
@@ -184,13 +210,20 @@ export async function GET(
       waybillNumber: courierInfo.waybill_number || null,
       courier: courierInfo.courier_code || null,
       courierCode: courierInfo.courier_code || null,
-      shippingFee: courierInfo.shipping_fee ? Number(courierInfo.shipping_fee) : null,
-      estimatedDelivery: courierInfo.estimated_delivery || null,
+      // Prefer delivery_location.shipping_fee (set at checkout by mobile) over post-shipment column
+      shippingFee: deliveryLocation?.shipping_fee
+        ? Number(deliveryLocation.shipping_fee)
+        : deliveryLocation?.courier_info?.shipping_fee
+        ? Number(deliveryLocation.courier_info.shipping_fee)
+        : courierInfo.shipping_fee
+        ? Number(courierInfo.shipping_fee)
+        : null,
+      estimatedDelivery: courierInfo.estimated_delivery || deliveryLocation?.courier_info?.estimated_delivery || null,
       // Delivery location from checkout
       deliveryLocation: deliveryLocation,
       deliveryAddress: deliveryAddressString,
-      recipientName: deliveryLocation?.recipient_name || customerName,
-      recipientPhone: deliveryLocation?.phone_number || customerPhone,
+      recipientName: snap?.recipient_name || deliveryLocation?.recipient_name || customerName,
+      recipientPhone: snap?.recipient_phone || deliveryLocation?.phone_number || customerPhone,
       // Links
       paymentLink: `https://balidining.me/order/${order.id}`,
       payment: paymentInfo,

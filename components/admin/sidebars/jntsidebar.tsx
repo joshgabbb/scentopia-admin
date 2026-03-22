@@ -15,10 +15,25 @@ interface Order {
   deliveryLocation?: {
     address?: string;
     full_address?: string;
-    region?: { code?: string; name?: string };
-    province?: { code?: string; name?: string };
-    city?: { code?: string; name?: string };
-    barangay?: { code?: string; name?: string };
+    shipping_fee?: number;
+    // Mobile stores structured data inside delivery_snapshot
+    delivery_snapshot?: {
+      full_address?: string;
+      recipient_name?: string;
+      recipient_phone?: string;
+      street_address?: string;
+      barangay?: string;
+      city_municipality?: string;
+      province?: string;
+      region?: string;
+      postal_code?: string;
+      landmark?: string;
+    };
+    // Legacy object format (some older orders may have this)
+    region?: { code?: string; name?: string } | string;
+    province?: { code?: string; name?: string } | string;
+    city?: { code?: string; name?: string } | string;
+    barangay?: { code?: string; name?: string } | string;
     street_address?: string;
     postal_code?: string;
     recipient_name?: string;
@@ -46,17 +61,87 @@ const SHIPPING_ZONES = {
 
 const WEIGHT_FEE_PER_500G = 20;
 
+// Mirrors mobile's _computeShippingFee() logic exactly
+function detectZoneFromAddress(region: string, province: string, city: string): keyof typeof SHIPPING_ZONES {
+  const r = region.toLowerCase();
+  const p = province.toLowerCase();
+  const c = city.toLowerCase();
+
+  // Metro Manila / NCR
+  if (r.includes('ncr') || r.includes('national capital') || r.includes('metro manila') ||
+      p.includes('metro manila') || p.includes('national capital') ||
+      c.includes('manila') || c.includes('quezon') || c.includes('makati') ||
+      c.includes('pasig') || c.includes('taguig') || c.includes('caloocan') ||
+      c.includes('pasay') || c.includes('paranaque') || c.includes('marikina') ||
+      c.includes('muntinlupa') || c.includes('las pinas') || c.includes('mandaluyong') ||
+      c.includes('valenzuela') || c.includes('malabon') || c.includes('navotas') ||
+      c.includes('san juan') || c.includes('pateros')) {
+    return 'METRO_MANILA';
+  }
+
+  // Visayas
+  if (r.includes('visayas') || r.includes('region vi') || r.includes('region vii') || r.includes('region viii') ||
+      p.includes('cebu') || p.includes('iloilo') || p.includes('negros') || p.includes('leyte') ||
+      p.includes('samar') || p.includes('aklan') || p.includes('antique') || p.includes('capiz') ||
+      p.includes('guimaras') || p.includes('biliran') || p.includes('bohol') || p.includes('siquijor')) {
+    return 'VISAYAS';
+  }
+
+  // Mindanao
+  if (r.includes('mindanao') || r.includes('zamboanga') || r.includes('davao') ||
+      r.includes('soccsksargen') || r.includes('caraga') || r.includes('barmm') ||
+      r.includes('bangsamoro') || r.includes('region ix') || r.includes('region x') ||
+      r.includes('region xi') || r.includes('region xii') || r.includes('region xiii') ||
+      p.includes('zamboanga') || p.includes('davao') || p.includes('maguindanao') ||
+      p.includes('lanao') || p.includes('bukidnon') || p.includes('misamis') ||
+      p.includes('surigao') || p.includes('agusan') || p.includes('cotabato') ||
+      p.includes('sarangani') || p.includes('sultan kudarat') || p.includes('compostela') ||
+      p.includes('basilan') || p.includes('sulu') || p.includes('tawi-tawi')) {
+    return 'MINDANAO';
+  }
+
+  // Default: Luzon provincial
+  return 'LUZON';
+}
+
+// Reverse-map a base fee amount to a zone key
+function zoneFromFee(fee: number): keyof typeof SHIPPING_ZONES | null {
+  if (fee === 85) return 'METRO_MANILA';
+  if (fee === 115) return 'LUZON';
+  if (fee === 150) return 'VISAYAS';
+  if (fee === 170) return 'MINDANAO';
+  return null;
+}
+
 export default function JntSidebar({ order, onClose, onStatusUpdate }: JntSidebarProps) {
   const { themeClasses: tc, isDark } = useTheme();
 
-  const recipientName = order.deliveryLocation?.recipient_name || order.recipientName || order.customerName || '';
-  const recipientPhone = order.deliveryLocation?.phone_number || order.recipientPhone || order.customerPhone || '';
-  const regionName = order.deliveryLocation?.region?.name || '';
-  const provinceName = order.deliveryLocation?.province?.name || '';
-  const cityName = order.deliveryLocation?.city?.name || '';
-  const barangayName = order.deliveryLocation?.barangay?.name || '';
-  const streetAddress = order.deliveryLocation?.street_address || '';
-  const fullAddress = order.deliveryLocation?.full_address
+  // Mobile stores address inside delivery_snapshot; fall back to legacy flat fields
+  const snap = order.deliveryLocation?.delivery_snapshot;
+
+  const recipientName = snap?.recipient_name
+    || order.deliveryLocation?.recipient_name
+    || order.recipientName
+    || order.customerName
+    || '';
+  const recipientPhone = snap?.recipient_phone
+    || order.deliveryLocation?.phone_number
+    || order.recipientPhone
+    || order.customerPhone
+    || '';
+
+  // Region/province/city: snapshot strings first, then legacy object or string format
+  const getStr = (val: { name?: string } | string | undefined) =>
+    val ? (typeof val === 'string' ? val : (val.name ?? '')) : '';
+
+  const regionName = snap?.region || getStr(order.deliveryLocation?.region as any) || '';
+  const provinceName = snap?.province || getStr(order.deliveryLocation?.province as any) || '';
+  const cityName = snap?.city_municipality || getStr(order.deliveryLocation?.city as any) || '';
+  const barangayName = snap?.barangay || getStr(order.deliveryLocation?.barangay as any) || '';
+  const streetAddress = snap?.street_address || order.deliveryLocation?.street_address || '';
+
+  const fullAddress = snap?.full_address
+    || order.deliveryLocation?.full_address
     || order.deliveryLocation?.address
     || order.deliveryAddress
     || [streetAddress, barangayName, cityName, provinceName, regionName].filter(Boolean).join(', ');
@@ -70,28 +155,20 @@ export default function JntSidebar({ order, onClose, onStatusUpdate }: JntSideba
   const [error, setError] = useState<string>('');
   const [copied, setCopied] = useState(false);
 
+  // Auto-detect zone from address data (mirrors mobile logic)
   useEffect(() => {
-    const region = regionName.toLowerCase();
-    if (region.includes('ncr') || region.includes('metro manila') || region.includes('national capital')) {
-      setSelectedZone('METRO_MANILA');
-    } else if (region.includes('visayas') || region.includes('cebu') || region.includes('iloilo') ||
-               region.includes('negros') || region.includes('bohol') || region.includes('leyte') ||
-               region.includes('samar') || region.includes('aklan') || region.includes('antique') ||
-               region.includes('region vi') || region.includes('region vii') || region.includes('region viii')) {
-      setSelectedZone('VISAYAS');
-    } else if (region.includes('mindanao') || region.includes('davao') || region.includes('zamboanga') ||
-               region.includes('bukidnon') || region.includes('cotabato') || region.includes('caraga') ||
-               region.includes('soccsksargen') || region.includes('armm') || region.includes('barmm') ||
-               region.includes('region ix') || region.includes('region x') || region.includes('region xi') ||
-               region.includes('region xii') || region.includes('region xiii')) {
-      setSelectedZone('MINDANAO');
-    } else if (region) {
-      setSelectedZone('LUZON');
+    if (regionName || provinceName || cityName) {
+      setSelectedZone(detectZoneFromAddress(regionName, provinceName, cityName));
+    } else if (order.shippingFee) {
+      // If no region string but we have the checkout fee, reverse-map it
+      const z = zoneFromFee(order.shippingFee);
+      if (z) setSelectedZone(z);
     }
-  }, [regionName]);
+  }, [regionName, provinceName, cityName, order.shippingFee]);
 
   useEffect(() => {
     if (order.shippingFee && order.shippingFee > 0) {
+      // Use the fee stored at checkout (already zone+weight calculated by mobile)
       setShippingFee(order.shippingFee);
     } else {
       const zone = SHIPPING_ZONES[selectedZone];
@@ -371,9 +448,16 @@ export default function JntSidebar({ order, onClose, onStatusUpdate }: JntSideba
 
           <div className="space-y-3">
             <div>
-              <label className={`block text-xs font-medium ${tc.textMuted} mb-1.5 uppercase tracking-wide`}>
-                Delivery Zone
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className={`block text-xs font-medium ${tc.textMuted} uppercase tracking-wide`}>
+                  Delivery Zone
+                </label>
+                {(regionName || provinceName || order.shippingFee) && (
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${isDark ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'}`}>
+                    Auto-detected
+                  </span>
+                )}
+              </div>
               <select
                 value={selectedZone}
                 onChange={(e) => setSelectedZone(e.target.value as keyof typeof SHIPPING_ZONES)}

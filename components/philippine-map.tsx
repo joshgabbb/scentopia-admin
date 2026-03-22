@@ -62,8 +62,6 @@ const PhilippineMap = forwardRef<PhilippineMapRef, PhilippineMapProps>(({
     }
 
     if (!element) {
-      console.error(`Province element not found for ID: ${id}`);
-      console.log('Available elements with IDs:', getAllProvinceIds());
       return;
     }
 
@@ -100,24 +98,28 @@ const PhilippineMap = forwardRef<PhilippineMapRef, PhilippineMapProps>(({
   // Function to scale SVG to fit container
   const scaleSvgToFit = () => {
     if (!mapRef.current) return;
-    
-    const svgEl = mapRef.current.querySelector("svg");
-    if (svgEl) {
-      // Remove any existing dimensions
-      svgEl.removeAttribute("width");
-      svgEl.removeAttribute("height");
-      
-      // Set responsive dimensions
-      svgEl.setAttribute("width", "100%");
-      svgEl.setAttribute("height", "100%");
-      svgEl.setAttribute("preserveAspectRatio", "xMidYMid meet");
-      
-      // Ensure the viewBox is preserved from the original SVG
-      if (!svgEl.getAttribute("viewBox")) {
-        svgEl.setAttribute("viewBox", "0 0 702.39 1209.4381");
-      }
-      
-      console.log("SVG scaled to fit container");
+
+    const svgEl = mapRef.current.querySelector("svg") as SVGElement | null;
+    if (!svgEl) return;
+
+    const containerW = mapRef.current.clientWidth;
+    const containerH = mapRef.current.clientHeight;
+
+    svgEl.removeAttribute("width");
+    svgEl.removeAttribute("height");
+
+    // Use explicit pixel dimensions read from the DOM so the SVG always
+    // fills the container exactly, regardless of CSS context (flex, block, grid).
+    svgEl.style.width = containerW > 0 ? `${containerW}px` : "100%";
+    svgEl.style.height = containerH > 0 ? `${containerH}px` : "100%";
+    svgEl.style.display = "block";
+
+    // xMidYMid meet: scale the viewBox to fit within the viewport while
+    // maintaining aspect ratio and centering it.
+    svgEl.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+    if (!svgEl.getAttribute("viewBox")) {
+      svgEl.setAttribute("viewBox", "0 0 702.39 1209.4381");
     }
   };
 

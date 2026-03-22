@@ -78,14 +78,23 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+// The server generates period strings from UTC dates (Node.js runs in UTC).
+// Browsers parse bare date strings as local time, which shifts the date in UTC+ timezones.
+// This helper recovers the original UTC date by inverting the timezone offset.
+function localAsUtcIso(d: Date): string {
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+    .toISOString()
+    .split('T')[0];
+}
+
 // Converts a human-readable period back to ISO date range for URL params
 function periodToDateRange(period: string, type: ReportType): { from: string; to: string } | null {
   try {
     if (type === 'daily') {
-      // "Jan 15, 2024"
+      // "Jan 15, 2024" — treat as a UTC date (server generated it in UTC)
       const d = new Date(period);
       if (isNaN(d.getTime())) return null;
-      const iso = d.toISOString().split('T')[0];
+      const iso = localAsUtcIso(d);
       return { from: iso, to: iso };
     }
     if (type === 'weekly') {
@@ -94,18 +103,19 @@ function periodToDateRange(period: string, type: ReportType): { from: string; to
       if (!match) return null;
       const start = new Date(match[1]);
       if (isNaN(start.getTime())) return null;
-      const end = new Date(start);
-      end.setDate(end.getDate() + 6);
-      return { from: start.toISOString().split('T')[0], to: end.toISOString().split('T')[0] };
+      const fromIso = localAsUtcIso(start);
+      const endMs = new Date(fromIso).getTime() + 6 * 24 * 60 * 60 * 1000;
+      const toIso = new Date(endMs).toISOString().split('T')[0];
+      return { from: fromIso, to: toIso };
     }
     if (type === 'monthly') {
       // "January 2024"
       const d = new Date(period + ' 1');
       if (isNaN(d.getTime())) return null;
-      const year = d.getFullYear();
-      const month = d.getMonth();
-      const from = new Date(year, month, 1).toISOString().split('T')[0];
-      const to = new Date(year, month + 1, 0).toISOString().split('T')[0];
+      const iso = localAsUtcIso(d);
+      const [year, month] = iso.split('-').map(Number);
+      const from = `${year}-${String(month).padStart(2, '0')}-01`;
+      const to = new Date(Date.UTC(year, month, 0)).toISOString().split('T')[0];
       return { from, to };
     }
   } catch {

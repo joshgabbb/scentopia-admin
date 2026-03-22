@@ -3,7 +3,7 @@
 // app/admin/orders/page.tsx
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Search,
@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import OrderDetails from "./order-details";
 import { exportReport, createOrdersExportConfig, type ExportFormat } from "@/lib/export-utils";
+import { createClient } from "@/lib/supabase/client";
 
 // [Keep all the interfaces the same - PaymentInfo, OrderItem, Order, OrdersData]
 interface PaymentInfo {
@@ -161,6 +162,14 @@ function OrdersContent() {
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>("all");
   const [appliedDateFrom, setAppliedDateFrom] = useState(() => searchParams.get('from') || "");
   const [appliedDateTo, setAppliedDateTo] = useState(() => searchParams.get('to') || "");
+  const [source, setSource] = useState<'app' | 'store'>(() =>
+    searchParams.get('source') === 'store' ? 'store' : 'app'
+  );
+  const [posTransactions, setPosTransactions] = useState<any[]>([]);
+  const [posLoading, setPosLoading] = useState(false);
+  const [posTotalCount, setPosTotalCount] = useState(0);
+  const [posTotalPages, setPosTotalPages] = useState(1);
+  const [posCurrentPage, setPosCurrentPage] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isLoadingOrder, setIsLoadingOrder] = useState(false);
   // NEW: Add these states for modals and actions
@@ -271,6 +280,54 @@ const [exportOptions, setExportOptions] = useState({
   useEffect(() => {
     fetchOrders();
   }, [currentPage, sortBy, sortOrder, statusFilter, paymentStatusFilter, appliedDateFrom, appliedDateTo]);
+
+  // Keep a ref to the latest fetchOrders so the realtime callback is never stale
+  const fetchOrdersRef = useRef(fetchOrders);
+  useEffect(() => { fetchOrdersRef.current = fetchOrders; });
+
+  // Realtime subscription + 30-second polling for live order updates
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel('admin-orders-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        fetchOrdersRef.current();
+      })
+      .subscribe();
+
+    const interval = setInterval(() => {
+      fetchOrdersRef.current();
+    }, 30000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+    };
+  }, []);
+
+  const fetchPosTransactions = async () => {
+    setPosLoading(true);
+    try {
+      const params = new URLSearchParams({ page: posCurrentPage.toString() });
+      if (appliedDateFrom) params.append('date_from', appliedDateFrom);
+      if (appliedDateTo) params.append('date_to', appliedDateTo);
+      const res = await fetch(`/api/admin/pos-transactions?${params}`);
+      const result = await res.json();
+      if (result.success) {
+        setPosTransactions(result.data.transactions);
+        setPosTotalCount(result.data.totalCount);
+        setPosTotalPages(result.data.totalPages);
+      }
+    } catch {
+      // silent
+    } finally {
+      setPosLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (source === 'store') fetchPosTransactions();
+  }, [source, posCurrentPage, appliedDateFrom, appliedDateTo]);
 
   // Fetch order stats for summary
   useEffect(() => {
@@ -609,6 +666,10 @@ const executeExport = () => {
               {data?.totalCount || 0}
             </span>
           </div>
+          <span className="flex items-center gap-1 text-[10px] font-semibold text-green-500 uppercase tracking-wider">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+            Live
+          </span>
         </div>
       </div>
 
@@ -630,6 +691,23 @@ const executeExport = () => {
           <p className="text-sm text-[#7a6a4a]">Revenue</p>
           <p className="text-2xl font-bold text-[#d4af37]">{formatCurrency(orderStats.totalRevenue)}</p>
         </div>
+      </div>
+
+      {/* Source Toggle */}
+      <div className="flex gap-0 border-b border-[#e8e0d0]">
+        {(['app', 'store'] as const).map((s) => (
+          <button
+            key={s}
+            onClick={() => { setSource(s); setPosCurrentPage(1); }}
+            className={`px-5 py-2.5 text-xs font-semibold uppercase tracking-widest border-b-2 -mb-px transition-colors ${
+              source === s
+                ? 'border-[#D4AF37] text-[#8B6914]'
+                : 'border-transparent text-[#7a6a4a] hover:text-[#1c1810]'
+            }`}
+          >
+            {s === 'app' ? 'App Orders' : 'Physical Store'}
+          </button>
+        ))}
       </div>
 
       {/* Search and Filters */}
@@ -1168,22 +1246,102 @@ const executeExport = () => {
 
       {/* Active Date Filter Banner */}
       {(appliedDateFrom || appliedDateTo) && (
-        <div className="flex items-center gap-3 px-4 py-2 bg-[#fffdf5] border border-[#D4AF37]/40 border-l-4 border-l-[#D4AF37] text-sm">
-          <span className="text-[#8B6914] font-medium">Filtered:</span>
-          <span className="text-[#1c1810]">
+        <div className="flex items-center gap-3 px-4 py-2 bg-[#fffdf5] dark:bg-[#1c1a14] border border-[#D4AF37]/40 border-l-4 border-l-[#D4AF37] text-sm">
+          <span className="text-[#8B6914] dark:text-[#D4AF37] font-medium">Filtered:</span>
+          <span className="text-[#1c1810] dark:text-[#f0e8d8]">
             Orders from{' '}
             <strong>{appliedDateFrom || '—'}</strong> to <strong>{appliedDateTo || '—'}</strong>
           </span>
           <button
             onClick={() => { setAppliedDateFrom(''); setAppliedDateTo(''); }}
-            className="ml-auto text-xs text-[#8B6914] hover:text-[#d4af37] underline"
+            className="ml-auto text-xs text-[#8B6914] dark:text-[#D4AF37] hover:text-[#d4af37] dark:hover:text-[#f0d060] underline"
           >
             Clear date filter
           </button>
         </div>
       )}
 
-      {/* Orders Table */}
+      {/* Physical Store Transactions Table */}
+      {source === 'store' && (
+        <div className="bg-[#faf8f3] border border-[#e8e0d0]">
+          <div className="px-6 py-4 border-b border-[#e8e0d0]">
+            <h2 className="text-lg font-medium text-[#d4af37]">
+              Physical Store Transactions
+              <span className="ml-2 text-sm font-normal text-[#7a6a4a]">({posTotalCount} total)</span>
+            </h2>
+          </div>
+          <div className="overflow-x-auto max-h-[calc(100vh-380px)] overflow-y-auto">
+            <table className="w-full">
+              <thead className="bg-white dark:bg-[#26231a] border-b border-[#e8e0d0] dark:border-[#2e2a1e] sticky top-0 z-10">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#7a6a4a] uppercase tracking-wider">Transaction #</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#7a6a4a] uppercase tracking-wider">Items</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#7a6a4a] uppercase tracking-wider">Total</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#7a6a4a] uppercase tracking-wider">Date</th>
+                </tr>
+              </thead>
+              <tbody className="bg-[#faf8f3] divide-y divide-[#d4af37]/10">
+                {posLoading ? (
+                  Array.from({ length: 8 }).map((_, i) => <OrderRowSkeleton key={i} />)
+                ) : posTransactions.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-12 text-center text-[#7a6a4a]">
+                      No transactions found
+                    </td>
+                  </tr>
+                ) : (
+                  posTransactions.map((tx) => (
+                    <tr key={tx.id} className="hover:bg-[#d4af37]/5 transition-colors">
+                      <td className="px-6 py-4 text-sm font-mono text-[#1c1810]">{tx.transactionNumber}</td>
+                      <td className="px-6 py-4 text-sm text-[#1c1810]">
+                        <div className="space-y-0.5">
+                          {tx.items.slice(0, 3).map((item: any, i: number) => (
+                            <div key={i} className="text-xs">
+                              {item.productName} × {item.quantity}
+                            </div>
+                          ))}
+                          {tx.items.length > 3 && (
+                            <div className="text-xs text-[#7a6a4a]">+{tx.items.length - 3} more</div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm font-medium text-[#d4af37]">
+                        {formatCurrency(tx.totalAmount)}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-[#7a6a4a]">
+                        {new Date(tx.createdAt).toLocaleDateString('en-PH', {
+                          year: 'numeric', month: 'short', day: 'numeric',
+                          hour: '2-digit', minute: '2-digit'
+                        })}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          {posTotalPages > 1 && (
+            <div className="px-6 py-4 border-t border-[#e8e0d0] flex items-center justify-between">
+              <div className="text-sm text-[#7a6a4a]">Page {posCurrentPage} of {posTotalPages}</div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setPosCurrentPage(Math.max(1, posCurrentPage - 1))}
+                  disabled={posCurrentPage === 1}
+                  className="px-3 py-1 border border-[#e8e0d0] text-[#1c1810] hover:bg-[#d4af37]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >Previous</button>
+                <button
+                  onClick={() => setPosCurrentPage(Math.min(posTotalPages, posCurrentPage + 1))}
+                  disabled={posCurrentPage === posTotalPages}
+                  className="px-3 py-1 border border-[#e8e0d0] text-[#1c1810] hover:bg-[#d4af37]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >Next</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* App Orders Table */}
+      {source === 'app' && (
       <div className="bg-[#faf8f3] border border-[#e8e0d0]">
         <div className="px-6 py-4 border-b border-[#e8e0d0]">
           <h2 className="text-lg font-medium text-[#d4af37]">Orders</h2>
@@ -1392,6 +1550,7 @@ const executeExport = () => {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

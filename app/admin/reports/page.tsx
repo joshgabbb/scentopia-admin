@@ -7,15 +7,19 @@ import {
   Package,
   LineChart,
   GitBranch,
-  Map
+  Map,
+  Store,
+  BarChart2,
 } from "lucide-react";
 import HeatmapSection from "./partials/heatmap-section";
 import SalesForecastingSection from "./partials/sales-forecast-section";
 import ProductAssociationsSection from "./partials/product-associations-section";
 import SalesReportsSection from "./partials/sales-reports-section";
 import InventoryReportsSection from "./partials/inventory-reports-section";
+import PhysicalStoreReportsSection from "./partials/physical-store-reports-section";
+import CombinedReportsSection from "./partials/combined-reports-section";
 
-type TabType = "sales" | "inventory" | "forecast" | "associations" | "heatmap";
+type TabType = "sales" | "physical-store" | "combined" | "inventory" | "forecast" | "associations" | "heatmap";
 
 interface Tab {
   id: TabType;
@@ -24,7 +28,9 @@ interface Tab {
 }
 
 const tabs: Tab[] = [
-  { id: "sales", label: "Sales", icon: <TrendingUp className="w-4 h-4" /> },
+  { id: "sales", label: "Sales (App)", icon: <TrendingUp className="w-4 h-4" /> },
+  { id: "physical-store", label: "Physical Store Sales", icon: <Store className="w-4 h-4" /> },
+  { id: "combined", label: "Combined Sales", icon: <BarChart2 className="w-4 h-4" /> },
   { id: "inventory", label: "Inventory", icon: <Package className="w-4 h-4" /> },
   { id: "forecast", label: "Sales Forecast", icon: <LineChart className="w-4 h-4" /> },
   { id: "associations", label: "Product Associations", icon: <GitBranch className="w-4 h-4" /> },
@@ -34,33 +40,14 @@ const tabs: Tab[] = [
 export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState<TabType>("sales");
 
-  const salesData = {
-    "PH-CEB": 85,
-    "PH-MNL": 92,
-    "PH-SUR": 45,
-    "PH-DAV": 65,
-    "PH-ILI": 78,
-    "PH-LAG": 55,
-    "PH-CAV": 88,
-    "PH-BUL": 42,
-    "PH-PAM": 73,
-    "PH-BTG": 61,
-    "PH-RIZ": 82,
-    "PH-QUE": 38,
-    "PH-ALB": 69,
-    "PH-CAS": 76,
-    "PH-LEY": 52,
-    "PH-BOH": 84,
-    "PH-NEC": 47,
-    "PH-ILN": 91,
-    "PH-ZMB": 36,
-    "PH-TAR": 58
-  };
-
   const renderTabContent = () => {
     switch (activeTab) {
       case "sales":
         return <SalesReportsSection />;
+      case "physical-store":
+        return <PhysicalStoreReportsSection />;
+      case "combined":
+        return <CombinedReportsSection />;
       case "inventory":
         return <InventoryReportsSection />;
       case "forecast":
@@ -68,7 +55,7 @@ export default function ReportsPage() {
       case "associations":
         return <ProductAssociationsSection />;
       case "heatmap":
-        return <HeatmapSection data={salesData} />;
+        return <HeatmapSection />;
       default:
         return null;
     }

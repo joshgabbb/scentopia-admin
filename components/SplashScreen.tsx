@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 
 const PARTICLES = [
   { top: "12%",  left: "8%",   size: 3, delay: "0.4s",  duration: "4s"  },
@@ -14,16 +14,17 @@ const PARTICLES = [
 ];
 
 export default function SplashScreen() {
-  const [phase, setPhase] = useState<"show" | "exit" | "gone">("show");
+  // Start as "gone" so server renders null — avoids SSR/client hydration mismatch.
+  const [phase, setPhase] = useState<"show" | "exit" | "gone">("gone");
 
-  useEffect(() => {
-    if (
-      typeof window !== "undefined" &&
-      sessionStorage.getItem("scentopia_splash_done")
-    ) {
-      setPhase("gone");
-      return;
+  // useLayoutEffect runs before first paint on the client, so the splash
+  // appears immediately without any visible flash.
+  useLayoutEffect(() => {
+    if (sessionStorage.getItem("scentopia_splash_done")) {
+      return; // already shown; stay "gone"
     }
+
+    setPhase("show");
 
     const exitTimer = setTimeout(() => setPhase("exit"), 3000);
     const goneTimer = setTimeout(() => {
@@ -41,6 +42,7 @@ export default function SplashScreen() {
 
   return (
     <div
+      suppressHydrationWarning
       style={{
         position: "fixed",
         inset: 0,

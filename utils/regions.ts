@@ -173,6 +173,13 @@ export const provinceNames: Record<string, string> = {
 
 export type RegionType = "all" | "luzon" | "visayas" | "mindanao";
 
+export function getRegionForProvince(code: string): RegionType {
+  if (regionProvinces.luzon.includes(code)) return "luzon";
+  if (regionProvinces.visayas.includes(code)) return "visayas";
+  if (regionProvinces.mindanao.includes(code)) return "mindanao";
+  return "all";
+}
+
 export function getProvincesByRegion(region: RegionType): string[] {
   if (region === "all") {
     return [

@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useRef, useEffect } from "react";
-import { ArrowLeft, Copy, ExternalLink, ChevronRight, MoreHorizontal, Package, Truck, X } from "lucide-react";
+import { ArrowLeft, Copy, ExternalLink, ChevronRight, MoreHorizontal, Package, Truck, X, RotateCcw, CheckCircle, XCircle, Clock } from "lucide-react";
 import CustomSidebar from "@/components/modals/sidebar";
 import JntSidebar from "@/components/admin/sidebars/jntsidebar";
 
@@ -49,6 +49,7 @@ interface Order {
     phone_number?: string;
     latitude?: number;
     longitude?: number;
+    shipping_fee?: number;
     courier_info?: {
       waybill_number?: string;
       courier_code?: string;
@@ -88,21 +89,22 @@ const formatDate = (dateString: string) => {
 
 // BLACK & GOLD themed status colors
 const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'Pending':
+  switch (status?.toLowerCase()) {
+    case 'pending':
       return 'bg-yellow-900/20 text-yellow-400 border border-yellow-400/30';
-    case 'Processing':
+    case 'processing':
       return 'bg-blue-900/20 text-blue-400 border border-blue-400/30';
-    case 'Shipped':
+    case 'shipped':
       return 'bg-purple-900/20 text-purple-400 border border-purple-400/30';
-    case 'Delivered':
+    case 'delivered':
       return 'bg-green-900/20 text-green-400 border border-green-400/30';
-    case 'Cancelled':
+    case 'cancelled':
       return 'bg-red-900/20 text-red-400 border border-red-400/30';
     case 'paid':
     case 'completed':
       return 'bg-green-900/20 text-green-400 border border-green-400/30';
     case 'unpaid':
+    case 'failed':
       return 'bg-red-900/20 text-red-400 border border-red-400/30';
     case 'refunded':
       return 'bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/30';
@@ -129,6 +131,11 @@ const getFulfillmentStatus = (orderStatus: string) => {
 const Skeleton = ({ className }: { className?: string }) => (
   <div className={`animate-pulse bg-[#d4af37]/10 rounded ${className}`}></div>
 );
+
+const isPaidOrder = (order: Order) => {
+  const s = order.payment?.paymentStatus?.toLowerCase();
+  return s === 'paid' || s === 'completed';
+};
 
 const OrderActionsDropdown = ({
   order,
@@ -179,6 +186,20 @@ const OrderActionsDropdown = ({
   };
 
   const renderDropdownItems = () => {
+    const paid = isPaidOrder(order);
+
+    if (!paid && (order.status === 'Pending' || order.status === 'Processing')) {
+      return (
+        <div className="px-4 py-3">
+          <div className="flex items-center gap-2 text-red-500 mb-1">
+            <XCircle size={14} />
+            <span className="text-xs font-semibold">Payment Required</span>
+          </div>
+          <p className="text-xs text-[#7a6a4a]">Order must be paid before it can be processed or shipped.</p>
+        </div>
+      );
+    }
+
     switch (order.status) {
       case 'Pending':
         return (
@@ -191,7 +212,7 @@ const OrderActionsDropdown = ({
             {isUpdating ? 'Processing...' : 'Process Order'}
           </button>
         );
-      
+
       case 'Processing':
         return (
           <>
@@ -210,7 +231,7 @@ const OrderActionsDropdown = ({
             </button>
           </>
         );
-      
+
       default:
         return (
           <div className="px-4 py-2 text-sm text-[#7a6a4a]">
@@ -240,15 +261,72 @@ const OrderActionsDropdown = ({
   );
 };
 
+interface RefundRecord {
+  id: string;
+  order_id: string;
+  user_id: string;
+  reason: string;
+  description?: string;
+  image_url?: string;
+  amount: number;
+  status: 'Pending' | 'Approved' | 'Declined';
+  admin_note?: string;
+  created_at: string;
+}
+
 export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsProps) {
   const [currentOrder, setCurrentOrder] = useState(order);
   const [isJntSidebarOpen, setIsJntSidebarOpen] = useState(false);
   const [internalNote, setInternalNote] = useState(order?.note || '');
+  const [refund, setRefund] = useState<RefundRecord | null>(null);
+  const [refundLoading, setRefundLoading] = useState(false);
+  const [refundActionLoading, setRefundActionLoading] = useState(false);
+  const [adminNote, setAdminNote] = useState('');
 
   useEffect(() => {
     setCurrentOrder(order);
     setInternalNote(order?.note || '');
+    setRefund(null);
+    if (order?.id) fetchRefund(order.id);
   }, [order]);
+
+  const fetchRefund = async (orderId: string) => {
+    setRefundLoading(true);
+    try {
+      const res = await fetch(`/api/admin/refunds?order_id=${orderId}`);
+      const json = await res.json();
+      if (json.success && json.data?.length > 0) {
+        setRefund(json.data[0]);
+        setAdminNote(json.data[0].admin_note ?? '');
+      }
+    } catch (e) {
+      console.error('Failed to fetch refund:', e);
+    } finally {
+      setRefundLoading(false);
+    }
+  };
+
+  const handleRefundAction = async (action: 'approve' | 'decline') => {
+    if (!refund) return;
+    setRefundActionLoading(true);
+    try {
+      const res = await fetch('/api/admin/refunds', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refundId: refund.id, action, adminNote }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setRefund({ ...refund, status: json.status, admin_note: adminNote });
+      } else {
+        alert(`Failed: ${json.error}`);
+      }
+    } catch (e) {
+      console.error('Refund action failed:', e);
+    } finally {
+      setRefundActionLoading(false);
+    }
+  };
 
   const handleStatusUpdate = (newStatus: string) => {
     if (currentOrder) {
@@ -364,6 +442,91 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
             </div>
           </div>
 
+          {/* ── Order Flow Timeline ─────────────────────────────────────── */}
+          {currentOrder.status !== 'Cancelled' && (
+            <div className="bg-[#faf8f3] rounded-lg border border-[#e8e0d0] p-5">
+              <h2 className="text-xs font-semibold text-[#7a6a4a] uppercase tracking-wider mb-5">Order Progress</h2>
+              <div className="relative flex items-start justify-between">
+                {/* Connector line behind steps */}
+                <div className="absolute top-4 left-0 right-0 h-0.5 bg-[#e8e0d0]" style={{ zIndex: 0 }} />
+                <div
+                  className="absolute top-4 left-0 h-0.5 bg-[#d4af37] transition-all duration-500"
+                  style={{
+                    zIndex: 0,
+                    width: currentOrder.status === 'Pending' ? '0%'
+                      : currentOrder.status === 'Processing' ? '33%'
+                      : currentOrder.status === 'Shipped' ? '66%'
+                      : '100%',
+                  }}
+                />
+                {(
+                  [
+                    { key: 'Pending',    label: 'Order Placed',     sub: 'Awaiting processing' },
+                    { key: 'Processing', label: 'Processing',       sub: 'Being prepared' },
+                    { key: 'Shipped',    label: 'Shipped',          sub: 'On the way' },
+                    { key: 'Delivered',  label: 'Order Received',   sub: 'Delivered' },
+                  ] as const
+                ).map((step, i, arr) => {
+                  const statuses = ['Pending', 'Processing', 'Shipped', 'Delivered'] as const;
+                  const currentIdx = statuses.indexOf(currentOrder.status as typeof statuses[number]);
+                  const stepIdx = statuses.indexOf(step.key);
+                  const isComplete  = stepIdx < currentIdx;
+                  const isCurrent   = stepIdx === currentIdx;
+                  const isPending   = stepIdx > currentIdx;
+                  return (
+                    <div key={step.key} className="relative flex flex-col items-center flex-1" style={{ zIndex: 1 }}>
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300
+                          ${isComplete ? 'bg-[#d4af37] border-[#d4af37]'
+                          : isCurrent  ? 'bg-white border-[#d4af37] shadow-md shadow-[#d4af37]/30'
+                          :              'bg-white border-[#e8e0d0]'}`}
+                      >
+                        {isComplete ? (
+                          <CheckCircle size={16} className="text-white" />
+                        ) : isCurrent ? (
+                          <div className="w-3 h-3 rounded-full bg-[#d4af37]" />
+                        ) : (
+                          <div className="w-3 h-3 rounded-full bg-[#e8e0d0]" />
+                        )}
+                      </div>
+                      <p className={`mt-2 text-xs font-semibold text-center leading-tight
+                        ${isComplete || isCurrent ? 'text-[#d4af37]' : 'text-[#7a6a4a]'}`}>
+                        {step.label}
+                      </p>
+                      <p className={`text-[10px] text-center mt-0.5 ${isCurrent ? 'text-[#8B6914]' : 'text-[#7a6a4a]/60'}`}>
+                        {step.sub}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Contextual hint for admin */}
+              <div className="mt-5 pt-4 border-t border-[#e8e0d0]">
+                {currentOrder.status === 'Pending' && (
+                  <p className="text-xs text-[#7a6a4a] text-center">
+                    Use the <span className="font-semibold text-[#8B6914]">⋯ menu</span> → <span className="font-semibold text-[#8B6914]">Process Order</span> to confirm this order
+                  </p>
+                )}
+                {currentOrder.status === 'Processing' && (
+                  <p className="text-xs text-[#7a6a4a] text-center">
+                    Use the <span className="font-semibold text-[#8B6914]">⋯ menu</span> → <span className="font-semibold text-[#8B6914]">J&T Express</span> when ready to ship
+                  </p>
+                )}
+                {currentOrder.status === 'Shipped' && (
+                  <p className="text-xs text-[#7a6a4a] text-center">
+                    Waiting for the customer to confirm receipt
+                  </p>
+                )}
+                {currentOrder.status === 'Delivered' && (
+                  <p className="text-xs text-green-600 text-center font-medium">
+                    Order complete
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6">
               <div className="bg-[#faf8f3] rounded-lg border border-[#e8e0d0]">
@@ -387,11 +550,33 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
                     </div>
                   ))}
                 </div>
-                <div className="p-6 border-t border-[#e8e0d0] bg-white dark:bg-[#1c1a14]">
-                  <div className="flex justify-between items-center font-semibold text-lg">
-                    <span className="text-[#1c1810]">Total</span>
-                    <span className="text-[#d4af37]">{formatCurrency(currentOrder.amount)}</span>
-                  </div>
+                <div className="p-6 border-t border-[#e8e0d0] bg-white dark:bg-[#1c1a14] space-y-2">
+                  {(() => {
+                    const itemsSubtotal = currentOrder.items.reduce((sum, item) => sum + item.itemAmount, 0);
+                    const deliveryFee = currentOrder.deliveryLocation?.shipping_fee
+                      ?? currentOrder.deliveryLocation?.courier_info?.shipping_fee
+                      ?? currentOrder.shippingFee
+                      ?? null;
+                    const total = currentOrder.amount;
+                    return (
+                      <>
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-[#7a6a4a]">Subtotal</span>
+                          <span className="text-[#1c1810]">{formatCurrency(itemsSubtotal)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-[#7a6a4a]">Delivery Fee</span>
+                          <span className="text-[#1c1810]">
+                            {deliveryFee != null ? formatCurrency(deliveryFee) : '—'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center font-semibold text-base pt-2 border-t border-[#e8e0d0]">
+                          <span className="text-[#1c1810]">Total</span>
+                          <span className="text-[#d4af37]">{formatCurrency(total)}</span>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -430,6 +615,116 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
                   </div>
                 </div>
               )}
+
+              {/* Refund Management */}
+              <div className="bg-[#faf8f3] rounded-lg border border-[#e8e0d0]">
+                <div className="p-6 border-b border-[#e8e0d0] flex items-center gap-2">
+                  <RotateCcw size={18} className="text-[#d4af37]" />
+                  <h2 className="text-lg font-semibold text-[#d4af37]">Refund Request</h2>
+                </div>
+                <div className="p-6">
+                  {refundLoading ? (
+                    <div className="text-sm text-[#7a6a4a]">Loading...</div>
+                  ) : !refund ? (
+                    <p className="text-sm text-[#7a6a4a]">No refund request for this order.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {/* Status badge */}
+                      <div className="flex items-center gap-2">
+                        {refund.status === 'Approved' && <CheckCircle size={16} className="text-green-500" />}
+                        {refund.status === 'Declined' && <XCircle size={16} className="text-red-400" />}
+                        {refund.status === 'Pending' && <Clock size={16} className="text-orange-400" />}
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(refund.status.toLowerCase())}`}>
+                          {refund.status}
+                        </span>
+                        <span className="text-sm text-[#7a6a4a]">
+                          Submitted {formatDate(refund.created_at)}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm text-[#7a6a4a]">Refund Amount</p>
+                          <p className="font-semibold text-[#d4af37]">{formatCurrency(refund.amount)}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-[#7a6a4a]">Reason</p>
+                          <p className="font-medium text-[#1c1810] dark:text-[#f0e8d8]">{refund.reason}</p>
+                        </div>
+                      </div>
+
+                      {refund.description && (
+                        <div>
+                          <p className="text-sm text-[#7a6a4a]">Description</p>
+                          <p className="text-sm text-[#1c1810] dark:text-[#f0e8d8] mt-1">{refund.description}</p>
+                        </div>
+                      )}
+
+                      <div>
+                        <p className="text-sm text-[#7a6a4a] mb-2">Proof / Attachment</p>
+                        {refund.image_url ? (
+                          <a href={refund.image_url} target="_blank" rel="noopener noreferrer">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={refund.image_url}
+                              alt="Refund evidence"
+                              className="rounded-lg border border-[#e8e0d0] max-h-48 object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                            />
+                            <span className="flex items-center gap-1 text-xs text-[#d4af37] mt-1 hover:underline">
+                              <ExternalLink size={12} /> Open full image
+                            </span>
+                          </a>
+                        ) : (
+                          <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+                            <AlertTriangle size={14} className="text-amber-500 shrink-0" />
+                            <p className="text-xs text-amber-700">No photo attached — evidence may be insufficient to approve</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {refund.status === 'Pending' && (
+                        <div className="pt-2 space-y-3 border-t border-[#e8e0d0]">
+                          <div>
+                            <label className="text-sm text-[#7a6a4a] mb-1 block">Admin Note (optional)</label>
+                            <input
+                              type="text"
+                              value={adminNote}
+                              onChange={(e) => setAdminNote(e.target.value)}
+                              placeholder="Add a note for the customer..."
+                              className="w-full px-3 py-2 text-sm border border-[#e8e0d0] dark:border-[#2e2a1e] bg-white dark:bg-[#26231a] text-[#1c1810] dark:text-[#f0e8d8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                            />
+                          </div>
+                          <div className="flex gap-3">
+                            <button
+                              onClick={() => handleRefundAction('approve')}
+                              disabled={refundActionLoading}
+                              className="flex-1 flex items-center justify-center gap-2 py-2 px-4 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg disabled:opacity-50 transition-colors"
+                            >
+                              <CheckCircle size={15} />
+                              {refundActionLoading ? 'Processing...' : 'Approve Refund'}
+                            </button>
+                            <button
+                              onClick={() => handleRefundAction('decline')}
+                              disabled={refundActionLoading}
+                              className="flex-1 flex items-center justify-center gap-2 py-2 px-4 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg disabled:opacity-50 transition-colors"
+                            >
+                              <XCircle size={15} />
+                              {refundActionLoading ? 'Processing...' : 'Decline'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {refund.admin_note && refund.status !== 'Pending' && (
+                        <div className="pt-2 border-t border-[#e8e0d0]">
+                          <p className="text-sm text-[#7a6a4a]">Admin Note</p>
+                          <p className="text-sm text-[#1c1810] dark:text-[#f0e8d8] mt-1">{refund.admin_note}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="space-y-6">

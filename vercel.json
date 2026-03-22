@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/admin/orders/auto-complete",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/admin/refunds/auto-expire",
+      "schedule": "0 3 * * *"
+    }
+  ]
+}

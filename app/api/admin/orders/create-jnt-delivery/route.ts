@@ -51,10 +51,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if order is in a valid status for shipping
-    if (order.order_status !== 'Pending' && order.order_status !== 'Processing') {
+    // Check payment — cannot ship an unpaid order
+    const { data: payment } = await supabase
+      .from('payments')
+      .select('status')
+      .eq('order_id', orderId)
+      .maybeSingle();
+
+    const isPaid = payment?.status?.toLowerCase() === 'paid' || payment?.status?.toLowerCase() === 'completed';
+    if (!isPaid) {
       return NextResponse.json(
-        { success: false, error: `Cannot ship order with status: ${order.order_status}` },
+        { success: false, error: 'Order must be paid before it can be shipped.' },
+        { status: 400 }
+      );
+    }
+
+    // Check if order is in a valid status for shipping
+    // Only allow shipping when admin has explicitly processed the order first
+    if (order.order_status !== 'Processing') {
+      return NextResponse.json(
+        { success: false, error: `Order must be in Processing status before shipping. Current status: ${order.order_status}` },
         { status: 400 }
       );
     }
@@ -173,6 +189,15 @@ export async function POST(request: NextRequest) {
     } catch (notifErr) {
       // Notification is non-critical
       console.log('Notification system may not be available');
+    }
+
+    // Send Shipped status email (non-critical)
+    try {
+      await supabase.functions.invoke('send-status-email', {
+        body: { order_id: orderId, status: 'Shipped' },
+      });
+    } catch {
+      // Non-critical, continue
     }
 
     return NextResponse.json({

@@ -4,7 +4,7 @@
 import PhilippineMap, { PhilippineMapRef } from "@/components/philippine-map";
 import { useHeatmap } from "@/hooks/useHeatmap";
 import { useRef, useState, useMemo, useEffect, useCallback } from "react";
-import { getProvincesByRegion, RegionType, provinceNames } from "@/utils/regions";
+import { getProvincesByRegion, RegionType, provinceNames, getRegionForProvince } from "@/utils/regions";
 
 interface HeatmapSectionProps {
   data?: Record<string, number>;
@@ -54,7 +54,6 @@ export default function HeatmapSection({ data: propData }: HeatmapSectionProps) 
   // Use the heatmap hook - don't pass fallbackData to prevent it from being used
   const {
     data: heatmapData,
-    setColorFunction,
     loading,
     error,
     refreshData
@@ -102,46 +101,32 @@ export default function HeatmapSection({ data: propData }: HeatmapSectionProps) 
     return [...filteredData].sort(([, a], [, b]) => b - a);
   }, [filteredData]);
 
-  const getColorForValue = (value: number) => {
+  const getColorForValue = useCallback((value: number) => {
     const { lowThreshold, highThreshold } = statistics;
     if (value > highThreshold) return "#ef4444"; // Red - high orders
     if (value > lowThreshold) return "#f97316";  // Orange - medium orders
     return "#22c55e";                             // Green - low orders
-  };
+  }, [statistics]);
 
-  // Handle map loaded - pass color function to the hook
-  const handleMapLoaded = (colorFn: (id: string, color: string) => void) => {
-    setColorFunction(colorFn);
+  // Stable callback — only signals that the SVG is in the DOM and ready.
+  // Coloring is handled entirely by the useEffect below.
+  const handleMapLoaded = useCallback((_colorFn: (id: string, color: string) => void) => {
     setMapLoaded(true);
+  }, []);
 
-    // Apply colors with a delay to ensure SVG DOM is ready
-    setTimeout(() => {
-      filteredData.forEach(([id, value]) => {
-        try {
-          const color = getColorForValue(value);
-          colorFn(id, color);
-        } catch (err) {
-          console.warn(`Could not color province ${id}:`, err);
-        }
-      });
-    }, 500);
-  };
-
-  // Re-apply colors when region or data changes — only after map is ready
+  // Single source of truth for coloring — fires when data or map readiness changes.
+  // Cleanup cancels any pending timeout so stale timeouts never fire.
   useEffect(() => {
     if (!mapLoaded || !mapRef.current) return;
     const colorFn = mapRef.current.colorProvince;
-    setTimeout(() => {
+    const timeoutId = setTimeout(() => {
+      if (!mapRef.current) return;
       filteredData.forEach(([id, value]) => {
-        try {
-          const color = getColorForValue(value);
-          colorFn(id, color);
-        } catch (err) {
-          console.warn(`Could not color province ${id}:`, err);
-        }
+        colorFn(id, getColorForValue(value));
       });
-    }, 500);
-  }, [filteredData, mapLoaded]);
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [filteredData, mapLoaded, getColorForValue]);
 
   const fetchProvinceOrders = useCallback(async (provinceCode: string) => {
     setLoadingOrders(true);
@@ -160,13 +145,18 @@ export default function HeatmapSection({ data: propData }: HeatmapSectionProps) 
     if (selectedProvince === provinceCode) {
       setSelectedProvince(null);
       setProvinceOrders([]);
+      setMapLoaded(false);
+      setSelectedRegion("all");
     } else {
       setSelectedProvince(provinceCode);
       fetchProvinceOrders(provinceCode);
+      setMapLoaded(false);
+      setSelectedRegion(getRegionForProvince(provinceCode));
     }
   };
 
   const handleRegionChange = (newRegion: RegionType) => {
+    setMapLoaded(false);
     setSelectedRegion(newRegion);
     setSelectedProvince(null);
     setProvinceOrders([]);
@@ -182,247 +172,248 @@ export default function HeatmapSection({ data: propData }: HeatmapSectionProps) 
   };
 
   return (
-    <div className="bg-[#faf8f3] dark:bg-[#1c1a14] border border-[#e8e0d0] dark:border-[#2e2a1e] p-6">
+    <div className="space-y-5">
 
-      {/* ── Data Basis Banner ─────────────────────────────────────────── */}
-      <div className="border-l-4 border-[#D4AF37] bg-[#fffdf5] dark:bg-[#26231a] px-4 py-3 flex flex-col sm:flex-row sm:items-start gap-3 mb-6">
-        <div className="flex-shrink-0 mt-0.5">
-          <svg className="w-4 h-4 text-[#8B6914] dark:text-[#D4AF37]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
+      {/* ── Header ───────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold text-[#1c1810] uppercase tracking-[2px]">
+            {getMapTitle()}
+          </h2>
+          <p className="text-xs text-[#7a6a4a] mt-1">
+            Delivery locations grouped by province · Cancelled orders excluded
+          </p>
         </div>
-        <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
-          <div>
-            <span className="font-semibold text-[#8B6914] dark:text-[#D4AF37] uppercase tracking-wide">Data Source</span>
-            <span className="ml-2 text-[#1c1810] dark:text-[#f0e8d8]">
-              <code className="bg-[#f2ede4] dark:bg-[#26231a] px-1 rounded">orders</code> table — delivery location field mapped to Philippine province codes
-            </span>
-          </div>
-          <div>
-            <span className="font-semibold text-[#8B6914] dark:text-[#D4AF37] uppercase tracking-wide">Basis</span>
-            <span className="ml-2 text-[#1c1810] dark:text-[#f0e8d8]">Order delivery coordinates grouped by province — color intensity = order volume</span>
-          </div>
-          <div>
-            <span className="font-semibold text-[#8B6914] dark:text-[#D4AF37] uppercase tracking-wide">Note</span>
-            <span className="ml-2 text-[#1c1810] dark:text-[#f0e8d8]">Fallback sample data is displayed when live order location data is unavailable</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-semibold text-[#d4af37] uppercase tracking-[2px]">
-          {getMapTitle()}
-        </h2>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 shrink-0">
           {loading && (
-            <span className="text-sm text-[#7a6a4a] dark:text-[#9a8a68]">Loading data...</span>
+            <span className="text-xs text-[#7a6a4a]">Loading...</span>
           )}
           {error && (
-            <span className="text-sm text-red-400">Using fallback data</span>
+            <span className="text-xs text-amber-600 font-medium">Using sample data</span>
           )}
           <button
             onClick={refreshData}
             disabled={loading}
-            className="px-3 py-1 text-sm bg-[#d4af37] text-[#0a0a0a] hover:bg-[#d4af37]/90 disabled:opacity-50 transition-colors"
+            className="px-4 py-1.5 text-xs font-semibold bg-[#D4AF37] text-[#1c1810] hover:bg-[#c9a430] disabled:opacity-50 transition-colors uppercase tracking-wider"
           >
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Map Section */}
-        <div className="flex flex-1 h-[600px] flex-col justify-center items-center w-full bg-white dark:bg-[#26231a] border border-[#e8e0d0] dark:border-[#2e2a1e] py-8">
-          <span className="text-center flex items-center text-2xl font-semibold text-[#d4af37] uppercase tracking-[2px] mb-4">
-            PHILIPPINE MAP
-          </span>
-          <div className="w-full h-full flex items-center justify-center px-4">
+      {/* ── Region Tabs ──────────────────────────────────────────────── */}
+      <div className="flex gap-0 border-b border-[#e8e0d0]">
+        {(['all', 'luzon', 'visayas', 'mindanao'] as RegionType[]).map((r) => (
+          <button
+            key={r}
+            onClick={() => handleRegionChange(r)}
+            className={`px-5 py-2.5 text-xs font-semibold uppercase tracking-widest border-b-2 -mb-px transition-colors ${
+              selectedRegion === r
+                ? 'border-[#D4AF37] text-[#8B6914]'
+                : 'border-transparent text-[#7a6a4a] hover:text-[#1c1810] hover:border-[#e8e0d0]'
+            }`}
+          >
+            {r === 'all' ? 'All Regions' : r}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Stats Row ────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Total Orders', value: statistics.totalOrders },
+          { label: 'Provinces', value: statistics.total },
+          { label: 'Avg / Province', value: statistics.average },
+          { label: 'Peak Province', value: statistics.highest },
+        ].map(({ label, value }) => (
+          <div key={label} className="bg-white border border-[#e8e0d0] px-4 py-3">
+            <div className="text-[10px] font-semibold text-[#7a6a4a] uppercase tracking-wider mb-1">{label}</div>
+            <div className="text-2xl font-bold text-[#D4AF37]">{value.toLocaleString()}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Main Grid: Map + Rankings ────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+
+        {/* Map */}
+        <div className="lg:col-span-2 bg-white border border-[#e8e0d0] flex flex-col">
+          <div className="px-4 py-3 border-b border-[#e8e0d0] flex items-center justify-between shrink-0">
+            <span className="text-[10px] font-semibold text-[#7a6a4a] uppercase tracking-widest">
+              Geographic Distribution
+            </span>
+            {selectedProvince && (
+              <span className="text-[10px] font-semibold text-[#D4AF37] uppercase tracking-wider">
+                {provinceNames[selectedProvince]}
+              </span>
+            )}
+          </div>
+          <div className="h-[480px] overflow-hidden">
             <PhilippineMap
+              key={selectedRegion}
               ref={mapRef}
               region={selectedRegion}
               onMapLoaded={handleMapLoaded}
-              className="max-w-full max-h-full"
+              className="w-full h-full"
             />
           </div>
         </div>
 
-        {/* Details Section */}
-        <div className="flex flex-1 h-[600px] flex-col justify-start items-start w-full bg-white dark:bg-[#26231a] border border-[#e8e0d0] dark:border-[#2e2a1e] px-5 py-4 overflow-y-auto">
-          <div className="w-full space-y-4">
-            {/* Region Selector */}
-            <div>
-              <h2 className="text-2xl font-semibold text-[#d4af37] uppercase tracking-[2px]">
-                ORDER DATA
-              </h2>
-              <label className="block text-sm font-medium text-[#7a6a4a] dark:text-[#9a8a68] mb-2 mt-4">
-                Select Region
-              </label>
-              <select
-                value={selectedRegion}
-                onChange={(e) => handleRegionChange(e.target.value as RegionType)}
-                className="w-full px-3 py-2 border border-[#e8e0d0] dark:border-[#2e2a1e] bg-[#faf8f3] dark:bg-[#1c1a14] text-[#1c1810] dark:text-[#f0e8d8] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
-              >
-                <option value="all">All Regions</option>
-                <option value="luzon">Luzon</option>
-                <option value="visayas">Visayas</option>
-                <option value="mindanao">Mindanao</option>
-              </select>
-            </div>
+        {/* Right panel */}
+        <div className="lg:col-span-3 flex flex-col gap-4">
 
-            {/* Statistics */}
-            <div className="bg-[#faf8f3] dark:bg-[#1c1a14] border border-[#e8e0d0] dark:border-[#2e2a1e] p-3 grid grid-cols-2 gap-3">
-              <div>
-                <div className="text-sm text-[#7a6a4a] dark:text-[#9a8a68]">Total Orders</div>
-                <div className="text-xl font-bold text-[#d4af37]">{statistics.totalOrders}</div>
-              </div>
-              <div>
-                <div className="text-sm text-[#7a6a4a] dark:text-[#9a8a68]">Provinces with Data</div>
-                <div className="text-xl font-bold text-[#d4af37]">{statistics.total}</div>
-              </div>
-              <div>
-                <div className="text-sm text-[#7a6a4a] dark:text-[#9a8a68]">Average per Province</div>
-                <div className="text-xl font-bold text-[#d4af37]">{statistics.average}</div>
-              </div>
-              <div>
-                <div className="text-sm text-[#7a6a4a] dark:text-[#9a8a68]">Highest / Lowest</div>
-                <div className="text-xl font-bold text-[#d4af37]">{statistics.highest} / {statistics.lowest}</div>
+          {/* Rankings */}
+          <div className="bg-white border border-[#e8e0d0] flex flex-col">
+            <div className="px-4 py-3 border-b border-[#e8e0d0] flex items-center justify-between shrink-0">
+              <span className="text-[10px] font-semibold text-[#7a6a4a] uppercase tracking-widest">
+                Province Rankings
+              </span>
+              <div className="flex items-center gap-3 text-[10px] text-[#7a6a4a]">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                  Low (0–{statistics.lowThreshold})
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-orange-500 inline-block" />
+                  Mid ({statistics.lowThreshold + 1}–{statistics.highThreshold})
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
+                  High ({statistics.highThreshold + 1}+)
+                </span>
               </div>
             </div>
-
-            {/* Legend */}
-            <div>
-              <h3 className="text-sm font-medium text-[#7a6a4a] dark:text-[#9a8a68] mb-2">Legend (Orders):</h3>
-              <div className="flex flex-col space-y-2">
-                <div className="flex items-center space-x-2">
-                  <div className="w-4 h-4 bg-green-500"></div>
-                  <span className="text-sm text-[#1c1810] dark:text-[#f0e8d8]">Low (0-{statistics.lowThreshold})</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-4 h-4 bg-orange-500"></div>
-                  <span className="text-sm text-[#1c1810] dark:text-[#f0e8d8]">Medium ({statistics.lowThreshold + 1}-{statistics.highThreshold})</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-4 h-4 bg-red-500"></div>
-                  <span className="text-sm text-[#1c1810] dark:text-[#f0e8d8]">High ({statistics.highThreshold + 1}+)</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Province List */}
-            <div className="mt-4">
-              <h3 className="text-lg font-medium text-[#d4af37] mb-1">
-                Province Rankings (by Orders)
-              </h3>
-              <p className="text-xs text-[#b8a070] italic mb-3">Click a province to see its orders</p>
-              <div className="space-y-2 max-h-[220px] overflow-y-auto">
-                {sortedData.length > 0 ? (
-                  sortedData.map(([id, value]) => (
+            <div className="overflow-y-auto" style={{ maxHeight: 260 }}>
+              {sortedData.length > 0 ? (
+                sortedData.map(([id, value], index) => {
+                  const pct = statistics.highest > 0
+                    ? Math.round((value / statistics.highest) * 100)
+                    : 0;
+                  return (
                     <button
                       key={id}
                       onClick={() => handleProvinceClick(id)}
-                      className={`w-full flex items-center justify-between p-2 border text-sm transition-colors text-left ${
+                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors border-b border-[#e8e0d0]/60 last:border-0 ${
                         selectedProvince === id
-                          ? 'bg-[#d4af37]/10 border-[#d4af37]/60'
-                          : 'bg-[#faf8f3] dark:bg-[#1c1a14] border-[#e8e0d0] dark:border-[#2e2a1e] hover:bg-[#d4af37]/5 hover:border-[#d4af37]/30'
+                          ? 'bg-[#D4AF37]/10'
+                          : 'hover:bg-[#faf8f3]'
                       }`}
                     >
-                      <div className="flex items-center space-x-2">
-                        <div
-                          className="w-3 h-3 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: getColorForValue(value) }}
-                        />
-                        <span className="font-medium text-[#1c1810] dark:text-[#f0e8d8]">
-                          {provinceNames[id] || id}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-[#d4af37]">{value} orders</span>
-                        <span className="text-[#b8a070] text-xs">
-                          {selectedProvince === id ? '▲' : '▼'}
+                      <span className="text-[11px] font-mono text-[#b8a070] w-5 shrink-0 text-right">
+                        {index + 1}
+                      </span>
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: getColorForValue(value) }}
+                      />
+                      <span className="flex-1 text-xs font-medium text-[#1c1810] truncate">
+                        {provinceNames[id] || id}
+                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="w-16 h-1.5 bg-[#f2ede4] rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{ width: `${pct}%`, backgroundColor: getColorForValue(value) }}
+                          />
+                        </div>
+                        <span className="text-xs font-bold text-[#D4AF37] w-20 text-right">
+                          {value.toLocaleString()} orders
                         </span>
                       </div>
                     </button>
-                  ))
-                ) : (
-                  <div className="text-center text-[#7a6a4a] dark:text-[#9a8a68] mt-8">
-                    No data available for this region
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Province Orders Panel */}
-            {selectedProvince && (
-              <div className="mt-4 border border-[#d4af37]/30 bg-white dark:bg-[#1c1a14]">
-                <div className="flex items-center justify-between px-3 py-2 bg-[#faf8f3] dark:bg-[#26231a] border-b border-[#d4af37]/20">
-                  <div>
-                    <span className="font-semibold text-[#d4af37] text-sm">
-                      {provinceNames[selectedProvince] || selectedProvince}
-                    </span>
-                    <span className="ml-2 text-xs text-[#7a6a4a] dark:text-[#9a8a68]">
-                      {loadingOrders ? 'Loading...' : `${provinceOrders.length} order${provinceOrders.length !== 1 ? 's' : ''}`}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => { setSelectedProvince(null); setProvinceOrders([]); }}
-                    className="text-[#7a6a4a] dark:text-[#9a8a68] hover:text-[#1c1810] dark:hover:text-[#f0e8d8] text-lg leading-none"
-                  >
-                    ×
-                  </button>
+                  );
+                })
+              ) : (
+                <div className="flex items-center justify-center h-20 text-xs text-[#7a6a4a]">
+                  No data available for this region
                 </div>
-
-                {loadingOrders ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#d4af37]" />
-                  </div>
-                ) : provinceOrders.length === 0 ? (
-                  <div className="text-center py-6 text-sm text-[#7a6a4a] dark:text-[#9a8a68]">
-                    No orders found for this province
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto max-h-[240px] overflow-y-auto">
-                    <table className="w-full text-xs">
-                      <thead className="bg-[#faf8f3] dark:bg-[#26231a] sticky top-0">
-                        <tr className="text-[#7a6a4a] dark:text-[#9a8a68] border-b border-[#e8e0d0] dark:border-[#2e2a1e]">
-                          <th className="py-2 px-3 text-left">Order</th>
-                          <th className="py-2 px-3 text-left">Customer</th>
-                          <th className="py-2 px-3 text-right">Amount</th>
-                          <th className="py-2 px-3 text-left">Status</th>
-                          <th className="py-2 px-3 text-left">Date</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {provinceOrders.map((order) => (
-                          <tr key={order.id} className="border-b border-[#e8e0d0]/60 dark:border-[#2e2a1e]/60 hover:bg-[#faf8f3]/50 dark:hover:bg-white/5">
-                            <td className="py-2 px-3 font-mono text-[#8B6914] dark:text-[#D4AF37]">{order.orderNumber}</td>
-                            <td className="py-2 px-3 text-[#1c1810] dark:text-[#f0e8d8]">{order.customerName}</td>
-                            <td className="py-2 px-3 text-right font-medium text-[#d4af37]">
-                              ₱{order.amount.toLocaleString()}
-                            </td>
-                            <td className="py-2 px-3">
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                                order.status === 'Delivered' ? 'bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-400' :
-                                order.status === 'Cancelled' ? 'bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400' :
-                                order.status === 'Shipped' ? 'bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400' :
-                                order.status === 'Processing' ? 'bg-yellow-100 dark:bg-yellow-950/50 text-yellow-700 dark:text-yellow-400' :
-                                'bg-gray-100 dark:bg-gray-800/50 text-gray-600 dark:text-gray-400'
-                              }`}>
-                                {order.status}
-                              </span>
-                            </td>
-                            <td className="py-2 px-3 text-[#7a6a4a] dark:text-[#9a8a68]">
-                              {new Date(order.createdAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+            </div>
           </div>
+
+          {/* Province Orders Panel */}
+          {selectedProvince && (
+            <div className="bg-white border border-[#D4AF37]/40">
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#e8e0d0] shrink-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-[#D4AF37] uppercase tracking-wider">
+                    {provinceNames[selectedProvince] || selectedProvince}
+                  </span>
+                  {!loadingOrders && (
+                    <span className="text-[10px] bg-[#D4AF37]/10 text-[#8B6914] px-2 py-0.5 font-semibold">
+                      {provinceOrders.length} order{provinceOrders.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => { setSelectedProvince(null); setProvinceOrders([]); }}
+                  className="w-6 h-6 flex items-center justify-center text-[#7a6a4a] hover:text-[#1c1810] hover:bg-[#f2ede4] rounded transition-colors text-base leading-none"
+                >
+                  ×
+                </button>
+              </div>
+
+              {loadingOrders ? (
+                <div className="flex items-center justify-center py-6">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#D4AF37]" />
+                </div>
+              ) : provinceOrders.length === 0 ? (
+                <div className="text-center py-5 text-xs text-[#7a6a4a]">
+                  No orders found for this province
+                </div>
+              ) : (
+                <div className="overflow-auto max-h-[200px]">
+                  <table className="w-full text-xs">
+                    <thead className="bg-[#faf8f3] sticky top-0">
+                      <tr className="text-[10px] font-semibold text-[#7a6a4a] uppercase tracking-wider border-b border-[#e8e0d0]">
+                        <th className="py-2 px-4 text-left">Order</th>
+                        <th className="py-2 px-4 text-left">Customer</th>
+                        <th className="py-2 px-4 text-right">Amount</th>
+                        <th className="py-2 px-4 text-left">Status</th>
+                        <th className="py-2 px-4 text-left">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {provinceOrders.map((order) => (
+                        <tr key={order.id} className="border-b border-[#e8e0d0]/60 hover:bg-[#faf8f3]">
+                          <td className="py-2 px-4 font-mono text-[#8B6914]">{order.orderNumber}</td>
+                          <td className="py-2 px-4 text-[#1c1810]">{order.customerName}</td>
+                          <td className="py-2 px-4 text-right font-semibold text-[#D4AF37]">
+                            ₱{order.amount.toLocaleString()}
+                          </td>
+                          <td className="py-2 px-4">
+                            <span className={`px-2 py-0.5 text-[10px] font-semibold rounded-sm ${
+                              order.status === 'Delivered'  ? 'bg-green-50 text-green-700'  :
+                              order.status === 'Shipped'    ? 'bg-blue-50 text-blue-700'    :
+                              order.status === 'Processing' ? 'bg-amber-50 text-amber-700'  :
+                              'bg-gray-50 text-gray-600'
+                            }`}>
+                              {order.status}
+                            </span>
+                          </td>
+                          <td className="py-2 px-4 text-[#7a6a4a]">
+                            {new Date(order.createdAt).toLocaleDateString('en-PH', {
+                              month: 'short', day: 'numeric', year: 'numeric'
+                            })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Data note */}
+          <div className="border-l-2 border-[#D4AF37]/40 pl-3 text-[10px] text-[#7a6a4a] leading-relaxed">
+            Coordinates resolved from{' '}
+            <code className="bg-[#f2ede4] px-1">delivery_location</code>,{' '}
+            <code className="bg-[#f2ede4] px-1">delivery_snapshot</code>, and{' '}
+            <code className="bg-[#f2ede4] px-1">addresses</code>.
+            Cancelled orders are excluded.
+          </div>
+
         </div>
       </div>
     </div>
