@@ -11,8 +11,8 @@ export async function PATCH(
     const { id: orderId } = await context.params;
     const { status, title, body } = await request.json();
 
-    // Block Processing/Shipped if order is not paid
-    if (status === 'Processing' || status === 'Shipped') {
+    // Block Processing/To Ship/Shipped if order is not paid
+    if (status === 'Processing' || status === 'To Ship' || status === 'Shipped') {
       const { data: payment } = await supabase
         .from('payments')
         .select('status')
@@ -77,10 +77,15 @@ export async function PATCH(
             title: '🔄 Order is Being Processed',
             body: "We're preparing your order. We'll notify you when it ships.",
           },
+          'To Ship': {
+            type: 'pending_order',
+            title: '📦 Your Order is Packed!',
+            body: "Your order is packed and ready to be handed to J&T Express. We'll notify you once it's on its way.",
+          },
           Shipped: {
             type: 'pending_order',
             title: '🚚 Your Order is On Its Way!',
-            body: 'Your order has been shipped. Track your delivery for updates.',
+            body: 'Your order has been handed to J&T Express and is now on its way. Track your delivery for updates.',
           },
           Delivered: {
             type: 'successful_order',

@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     } else if (type === 'movement') {
       return await getStockMovementReport(supabase);
     } else {
-      return await getStockLevelsReport(supabase);
+      return await getStockLevelsReport(supabase, threshold);
     }
   } catch (error) {
     console.error('❌ Inventory Report API error:', error);
@@ -41,7 +41,7 @@ function sumStocks(stocks: unknown): number {
   );
 }
 
-async function getStockLevelsReport(supabase: any) {
+async function getStockLevelsReport(supabase: any, threshold: number) {
   // Table is `category` (not `categories`) per your schema
   const { data: products, error } = await supabase
     .from('products')
@@ -53,6 +53,7 @@ async function getStockLevelsReport(supabase: any) {
       sizes,
       is_active,
       updated_at,
+      perfume_type,
       category!products_category_id_fkey(
         name
       )
@@ -63,30 +64,32 @@ async function getStockLevelsReport(supabase: any) {
 
   if (error) throw error;
 
-  const formattedProducts = products?.map((product: any) => {
-    // stocks is JSONB: {"30ml": 5, "50ml": 10} — sum all sizes
-    const stock = sumStocks(product.stocks);
-    let status = 'In Stock';
-    if (stock === 0) status = 'Out of Stock';
-    else if (stock <= 10) status = 'Low Stock';
-    else if (stock <= 25) status = 'Medium Stock';
-
-    return {
-      id: product.id,
-      name: product.name,
-      category: product.category?.name || 'Uncategorized',
-      price: Number(product.price) || 0,
-      stock,
-      status,
-      lastUpdated: product.updated_at
-        ? new Date(product.updated_at).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-          })
-        : 'N/A',
-    };
-  }) || [];
+  // Expand each product into one row per size using the stocks JSONB keys
+  const formattedProducts: any[] = [];
+  for (const product of (products ?? [])) {
+    const stocksMap = (product.stocks || {}) as Record<string, number>;
+    const lastUpdated = product.updated_at
+      ? new Date(product.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : 'N/A';
+    for (const [size, qty] of Object.entries(stocksMap)) {
+      const stock = Number(qty) || 0;
+      let status = 'In Stock';
+      if (stock === 0) status = 'Out of Stock';
+      else if (stock <= threshold) status = 'Low Stock';
+      formattedProducts.push({
+        id: `${product.id}-${size}`,
+        productId: product.id,
+        name: product.name,
+        category: product.category?.name || 'Uncategorized',
+        perfumeType: product.perfume_type || 'Basic',
+        price: Number(product.price) || 0,
+        size,
+        stock,
+        status,
+        lastUpdated,
+      });
+    }
+  }
 
   const totalStock = formattedProducts.reduce((sum, p) => sum + p.stock, 0);
   const lowStockCount = formattedProducts.filter(p => p.status === 'Low Stock').length;
@@ -120,6 +123,7 @@ async function getLowStockReport(supabase: any, threshold: number) {
       sizes,
       is_active,
       updated_at,
+      perfume_type,
       category!products_category_id_fkey(
         name
       )
@@ -130,39 +134,37 @@ async function getLowStockReport(supabase: any, threshold: number) {
 
   if (error) throw error;
 
-  const formattedProducts = (products ?? [])
-    .map((product: any) => {
-      const stock = sumStocks(product.stocks);
+  // Expand each product into one row per size, filter by threshold per size
+  const allRows: any[] = [];
+  for (const product of (products ?? [])) {
+    const stocksMap = (product.stocks || {}) as Record<string, number>;
+    const lastUpdated = product.updated_at
+      ? new Date(product.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : 'N/A';
+    for (const [size, qty] of Object.entries(stocksMap)) {
+      const stock = Number(qty) || 0;
+      if (stock > threshold) continue; // only include sizes at or below threshold
       let status = 'Low Stock';
       let priority = 'Medium';
-
-      if (stock === 0) {
-        status = 'Out of Stock';
-        priority = 'Critical';
-      } else if (stock <= 5) {
-        priority = 'High';
-      }
-
-      return {
-        id: product.id,
+      if (stock === 0) { status = 'Out of Stock'; priority = 'Critical'; }
+      else if (stock <= 5) { priority = 'High'; }
+      allRows.push({
+        id: `${product.id}-${size}`,
+        productId: product.id,
         name: product.name,
         category: product.category?.name || 'Uncategorized',
+        perfumeType: product.perfume_type || 'Basic',
         price: Number(product.price) || 0,
+        size,
         stock,
         status,
         priority,
-        lastUpdated: product.updated_at
-          ? new Date(product.updated_at).toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-            })
-          : 'N/A',
-      };
-    })
-    // Apply threshold filter after computing total stock
-    .filter(p => p.stock <= threshold)
-    .sort((a, b) => a.stock - b.stock);
+        lastUpdated,
+      });
+    }
+  }
+
+  const formattedProducts = allRows.sort((a, b) => a.stock - b.stock);
 
   const outOfStockCount = formattedProducts.filter(p => p.status === 'Out of Stock').length;
   const criticalCount = formattedProducts.filter(p => p.priority === 'Critical').length;

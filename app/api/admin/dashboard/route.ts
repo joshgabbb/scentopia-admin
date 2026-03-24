@@ -13,13 +13,16 @@ export async function GET() {
       .from("profiles")
       .select("*", { count: "exact", head: true });
 
-    // Get total orders count and revenue
-    const { data: ordersData, count: totalOrders } = await supabase
+    // Get total orders count and revenue (exclude cancelled and refunded)
+    const { data: ordersData } = await supabase
       .from("orders")
-      .select("amount", { count: "exact" });
+      .select("amount, order_status");
 
-    const revenue =
-      ordersData?.reduce((sum, order) => sum + Number(order.amount), 0) || 0;
+    const validOrders = ordersData?.filter(
+      (o) => o.order_status !== "Cancelled" && o.order_status !== "Refunded"
+    ) || [];
+    const totalOrders = validOrders.length;
+    const revenue = validOrders.reduce((sum, order) => sum + Number(order.amount), 0);
 
     // Get total products count
     const { count: totalProducts } = await supabase

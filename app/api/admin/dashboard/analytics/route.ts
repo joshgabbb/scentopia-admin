@@ -77,8 +77,9 @@ export async function GET() {
       dailyOrders[dateKey] = 0;
     }
 
-    // Fill in actual data
+    // Fill in actual data (exclude cancelled and refunded)
     recentOrders?.forEach((order) => {
+      if (order.order_status === "Cancelled" || order.order_status === "Refunded") return;
       const dateKey = order.created_at.split("T")[0];
       if (dailyRevenue[dateKey] !== undefined) {
         dailyRevenue[dateKey] += Number(order.amount) || 0;
@@ -142,6 +143,7 @@ export async function GET() {
     let lastWeekOrders = 0;
 
     recentOrders?.forEach((order) => {
+      if (order.order_status === "Cancelled" || order.order_status === "Refunded") return;
       const orderDate = new Date(order.created_at);
       const amount = Number(order.amount) || 0;
 
@@ -162,10 +164,13 @@ export async function GET() {
       ? Math.round(((thisWeekOrders - lastWeekOrders) / lastWeekOrders) * 100)
       : thisWeekOrders > 0 ? 100 : 0;
 
-    // Calculate average order value
-    const totalRevenue = recentOrders?.reduce((sum, o) => sum + (Number(o.amount) || 0), 0) || 0;
-    const avgOrderValue = recentOrders && recentOrders.length > 0
-      ? Math.round(totalRevenue / recentOrders.length)
+    // Calculate average order value (exclude cancelled and refunded)
+    const validRecentOrders = recentOrders?.filter(
+      (o) => o.order_status !== "Cancelled" && o.order_status !== "Refunded"
+    ) || [];
+    const totalRevenue = validRecentOrders.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
+    const avgOrderValue = validRecentOrders.length > 0
+      ? Math.round(totalRevenue / validRecentOrders.length)
       : 0;
 
     // Calculate revenue by day of week
@@ -180,6 +185,7 @@ export async function GET() {
     };
 
     recentOrders?.forEach((order) => {
+      if (order.order_status === "Cancelled" || order.order_status === "Refunded") return;
       const dayOfWeek = new Date(order.created_at).getDay();
       revenueByDayOfWeek[dayOfWeek].revenue += Number(order.amount) || 0;
       revenueByDayOfWeek[dayOfWeek].orders += 1;
@@ -204,6 +210,7 @@ export async function GET() {
     let lastMonthOrders = 0;
 
     recentOrders?.forEach((order) => {
+      if (order.order_status === "Cancelled" || order.order_status === "Refunded") return;
       const orderDate = new Date(order.created_at);
       const amount = Number(order.amount) || 0;
 
@@ -317,7 +324,7 @@ export async function GET() {
           lastWeekOrders,
           ordersGrowth,
           avgOrderValue,
-          totalOrdersLast30Days: recentOrders?.length || 0,
+          totalOrdersLast30Days: validRecentOrders.length,
           thisMonthRevenue: Math.round(thisMonthRevenue),
           lastMonthRevenue: Math.round(lastMonthRevenue),
           monthlyGrowth: lastMonthRevenue > 0

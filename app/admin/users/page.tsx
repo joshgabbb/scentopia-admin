@@ -35,7 +35,7 @@ interface User {
   lastName: string;
   email: string;
   phone: string;
-  status: 'active' | 'inactive' | 'suspended';
+  status: 'active' | 'inactive' | 'suspended' | 'deactivated';
   isArchived: boolean;
   archivedAt: string | null;
   createdAt: string | null;
@@ -121,6 +121,7 @@ const getStatusColor = (status: string) => {
     'active': 'bg-green-500/20 text-green-400 border-green-500/30',
     'inactive': 'bg-gray-500/20 text-gray-400 border-gray-500/30',
     'suspended': 'bg-red-500/20 text-red-400 border-red-500/30',
+    'deactivated': 'bg-orange-500/20 text-orange-400 border-orange-500/30',
     'Pending': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
     'Processing': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
     'Shipped': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
@@ -135,6 +136,7 @@ const getStatusIcon = (status: string) => {
     case 'active': return <UserCheck className="w-3 h-3" />;
     case 'inactive': return <UserMinus className="w-3 h-3" />;
     case 'suspended': return <UserX className="w-3 h-3" />;
+    case 'deactivated': return <UserX className="w-3 h-3" />;
     default: return null;
   }
 };
@@ -496,6 +498,7 @@ export default function UsersPage() {
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
                 <option value="suspended">Suspended</option>
+                <option value="deactivated">Deactivated</option>
               </select>
             </div>
 
@@ -677,7 +680,7 @@ export default function UsersPage() {
                                       Activate
                                     </button>
                                   )}
-                                  {user.status !== 'inactive' && (
+                                  {user.status !== 'inactive' && user.status !== 'deactivated' && (
                                     <button
                                       onClick={() => openStatusModal(user, 'inactive')}
                                       className="w-full px-4 py-2 text-left text-sm text-gray-400 hover:bg-[#d4af37]/10 flex items-center gap-2"

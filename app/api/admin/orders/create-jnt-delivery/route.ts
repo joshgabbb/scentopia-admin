@@ -1,18 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    // Check authentication
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
+    const supabase = createAdminClient();
 
     const body = await request.json();
 
@@ -92,59 +83,21 @@ export async function POST(request: NextRequest) {
       }
     };
 
-    // Update the order - only use fields that exist
-    // Store all courier info in delivery_location JSON to avoid missing column errors
-    const updateData: any = {
-      order_status: 'Shipped',
-      updated_at: new Date().toISOString(),
-      delivery_location: updatedDeliveryLocation
-    };
+    // Update order status and store all courier info inside delivery_location JSONB
+    const { error: updateError } = await supabase
+      .from('orders')
+      .update({
+        order_status: 'To Ship',
+        delivery_location: updatedDeliveryLocation,
+      })
+      .eq('id', orderId);
 
-    // Try to add courier columns if they exist
-    try {
-      const { data: updatedOrder, error: updateError } = await supabase
-        .from('orders')
-        .update({
-          ...updateData,
-          waybill_number: waybillNumber,
-          courier_code: courierCode || 'JNT',
-          shipping_fee: shippingFee,
-          estimated_delivery: estimatedDelivery,
-        })
-        .eq('id', orderId)
-        .select()
-        .single();
-
-      if (updateError) {
-        // If courier columns don't exist, try without them
-        console.log('Trying update without courier columns...');
-        const { error: fallbackError } = await supabase
-          .from('orders')
-          .update(updateData)
-          .eq('id', orderId);
-
-        if (fallbackError) {
-          console.error('Error updating order:', fallbackError);
-          return NextResponse.json(
-            { success: false, error: 'Failed to update order status' },
-            { status: 500 }
-          );
-        }
-      }
-    } catch (e) {
-      // Fallback: update only basic fields
-      const { error: fallbackError } = await supabase
-        .from('orders')
-        .update(updateData)
-        .eq('id', orderId);
-
-      if (fallbackError) {
-        console.error('Error updating order (fallback):', fallbackError);
-        return NextResponse.json(
-          { success: false, error: 'Failed to update order status' },
-          { status: 500 }
-        );
-      }
+    if (updateError) {
+      console.error('Error updating order:', updateError);
+      return NextResponse.json(
+        { success: false, error: updateError.message },
+        { status: 500 }
+      );
     }
 
     // Create order tracking entry (optional - may fail due to RLS)
@@ -153,14 +106,9 @@ export async function POST(request: NextRequest) {
         .from('order_tracking')
         .insert({
           order_id: orderId,
-          order_status: 'Shipped',
-          title: 'Order Shipped via J&T Express',
-          body: `Your order has been shipped! Tracking number: ${waybillNumber}. Expected delivery: ${new Date(estimatedDelivery).toLocaleDateString('en-PH', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-          })}`,
+          order_status: 'To Ship',
+          title: 'Waybill Created — Ready to Hand Off',
+          body: `Your order has been packed and a waybill has been created. Tracking number: ${waybillNumber}. We will hand the package to J&T Express soon.`,
         });
     } catch (trackingError) {
       console.log('Tracking entry creation skipped (RLS or missing table):', trackingError);
@@ -173,8 +121,8 @@ export async function POST(request: NextRequest) {
         .from('notifications')
         .insert({
           user_id: order.user_id,
-          title: 'Order Shipped!',
-          body: `Your order has been shipped via J&T Express. Track with: ${waybillNumber}`,
+          title: '📦 Your Order is Packed!',
+          body: `Your order is packed and ready to be handed to J&T Express. Tracking number: ${waybillNumber}`,
           type: 'order_update',
           data: {
             order_id: orderId,
@@ -194,7 +142,7 @@ export async function POST(request: NextRequest) {
     // Send Shipped status email (non-critical)
     try {
       await supabase.functions.invoke('send-status-email', {
-        body: { order_id: orderId, status: 'Shipped' },
+        body: { order_id: orderId, status: 'To Ship' },
       });
     } catch {
       // Non-critical, continue
@@ -209,7 +157,7 @@ export async function POST(request: NextRequest) {
         courierName: courierName || 'J&T Express',
         shippingFee,
         estimatedDelivery,
-        status: 'Shipped',
+        status: 'To Ship',
         trackingUrl: `https://www.jtexpress.ph/index/query/gzquery.html?waybillnumber=${waybillNumber}`,
       }
     });

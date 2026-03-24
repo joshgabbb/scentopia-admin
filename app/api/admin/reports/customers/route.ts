@@ -60,6 +60,7 @@ async function getCustomerListReport(supabase: any, limit: number) {
   // Aggregate orders by user
   const ordersByUser: Record<string, { count: number; total: number; lastOrder: string }> = {};
   orders?.forEach((order: any) => {
+    if (order.order_status === 'Refunded') return;
     const userId = order.user_id;
     if (!ordersByUser[userId]) {
       ordersByUser[userId] = { count: 0, total: 0, lastOrder: '' };
@@ -144,6 +145,7 @@ async function getTopCustomersReport(supabase: any, limit: number) {
   }> = {};
 
   orders?.forEach((order: any) => {
+    if (order.order_status === 'Refunded') return;
     const userId = order.user_id;
     const profile = order.profiles as { first_name?: string; last_name?: string; email?: string } | null;
 
@@ -264,7 +266,7 @@ async function getCustomerOrdersReport(supabase: any, customerId: string) {
   }) || [];
 
   const totalSpent = formattedOrders
-    .filter(o => o.status !== 'Cancelled')
+    .filter(o => o.status !== 'Cancelled' && o.status !== 'Refunded')
     .reduce((sum, o) => sum + o.amount, 0);
 
   return NextResponse.json({

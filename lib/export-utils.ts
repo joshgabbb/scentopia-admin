@@ -22,6 +22,7 @@ const formatDate = (date: Date): string => {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
+    timeZone: 'Asia/Manila',
   });
 };
 
@@ -32,6 +33,7 @@ const formatDateTime = (date: Date): string => {
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: 'Asia/Manila',
   });
 };
 
@@ -340,6 +342,7 @@ export function createOrdersExportConfig(
       month: 'short',
       day: 'numeric',
       year: 'numeric',
+      timeZone: 'Asia/Manila',
     });
 
   return {
@@ -590,6 +593,7 @@ export function createOrderFulfillmentConfig(
       month: 'short',
       day: 'numeric',
       year: 'numeric',
+      timeZone: 'Asia/Manila',
     });
 
   const statusCounts = orders.reduce((acc: Record<string, number>, order) => {
@@ -636,6 +640,7 @@ export function createCancellationsConfig(
       month: 'short',
       day: 'numeric',
       year: 'numeric',
+      timeZone: 'Asia/Manila',
     });
 
   const totalRefunded = cancellations.reduce((sum, c) => sum + (c.amount || 0), 0);
@@ -672,7 +677,8 @@ export function createCancellationsConfig(
 // INVENTORY REPORT CONFIGS (NEW)
 // ============================================
 export function createStockLevelsConfig(
-  products: any[]
+  products: any[],
+  reportType: 'stock-levels' | 'low-stock' = 'stock-levels'
 ): ExportConfig {
   const formatCurrency = (amount: number) => `PHP ${amount.toLocaleString()}`;
 
@@ -680,31 +686,36 @@ export function createStockLevelsConfig(
   const lowStockCount = products.filter(p => p.status === 'Low Stock').length;
   const outOfStockCount = products.filter(p => p.status === 'Out of Stock').length;
 
-  return {
-    title: 'Stock Levels Report',
-    subtitle: 'Current inventory status for all products',
-    filename: 'stock_levels_report',
-    headers: [
-      'Product Name',
-      'Category',
-      'Price',
-      'Current Stock',
-      'Status',
-      'Last Updated',
-    ],
-    rows: products.map(prod => [
+  const isLowStock = reportType === 'low-stock';
+
+  const headers = isLowStock
+    ? ['Product Name', 'Category', 'Type', 'Size', 'Price', 'Current Stock', 'Status', 'Priority']
+    : ['Product Name', 'Category', 'Type', 'Size', 'Price', 'Current Stock', 'Status', 'Last Updated'];
+
+  const rows = products.map(prod => {
+    const base = [
       prod.name,
       prod.category || 'Uncategorized',
+      prod.perfumeType || 'Basic',
+      prod.size || '—',
       formatCurrency(prod.price || 0),
       prod.stock || 0,
       prod.status || 'In Stock',
-      prod.lastUpdated || 'N/A',
-    ]),
+    ];
+    return isLowStock ? [...base, prod.priority || 'Medium'] : [...base, prod.lastUpdated || 'N/A'];
+  });
+
+  return {
+    title: isLowStock ? 'Low Stock Alert Report' : 'Stock Levels Report',
+    subtitle: isLowStock ? 'Products at or below stock threshold by size' : 'Current inventory status per product size',
+    filename: isLowStock ? 'low_stock_report' : 'stock_levels_report',
+    headers,
+    rows,
     additionalInfo: [
-      { label: 'Total Products', value: products.length.toString() },
+      { label: 'Total Rows', value: products.length.toString() },
       { label: 'Total Stock Units', value: totalStock.toLocaleString() },
-      { label: 'Low Stock Items', value: lowStockCount.toString() },
-      { label: 'Out of Stock Items', value: outOfStockCount.toString() },
+      { label: 'Low Stock', value: lowStockCount.toString() },
+      { label: 'Out of Stock', value: outOfStockCount.toString() },
     ],
   };
 }

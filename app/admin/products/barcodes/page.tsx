@@ -10,6 +10,7 @@ import {
   History,
   Package,
   TrendingUp,
+  TrendingDown,
   Search,
   ChevronLeft,
   ChevronRight,
@@ -170,8 +171,9 @@ export default function BarcodesPage() {
         { event: "INSERT", schema: "public", table: "barcode_scans" },
         (payload) => {
           const scan = payload.new as ScanRecord;
-          const label = scan.scan_type === "stock_in" ? "Stock In" : "Sale";
-          showToast(`📱 Mobile scan: ${scan.product_name} (${scan.size}ml) — ${label} +${scan.quantity}`);
+          const label = scan.scan_type === "stock_in" ? "Stock In" : scan.scan_type === "stock_out" ? "Stock Out" : "Sale";
+          const sign = scan.scan_type === "stock_out" ? "-" : "+";
+          showToast(`📱 Mobile scan: ${scan.product_name} (${scan.size}) — ${label} ${sign}${scan.quantity}`);
           // Prepend new scan to history list
           setScans((prev) => [scan, ...prev.slice(0, 29)]);
           setScanTotalCount((prev) => prev + 1);
@@ -550,7 +552,7 @@ export default function BarcodesPage() {
         <div className="space-y-4">
           {/* Filter */}
           <div className="flex gap-3">
-            {(["", "stock_in", "sale"] as const).map((f) => (
+            {(["", "stock_in", "stock_out", "sale"] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => { setScanFilter(f); fetchScans(1, f); }}
@@ -560,7 +562,7 @@ export default function BarcodesPage() {
                     : "border border-[#e8e0d0] dark:border-[#2e2a1e] text-[#7a6a4a] dark:text-[#9a8a68] hover:bg-[#faf8f3] dark:hover:bg-[#26231a]"
                 }`}
               >
-                {f === "" ? "All" : f === "stock_in" ? "Stock In" : "Sales"}
+                {f === "" ? "All" : f === "stock_in" ? "Stock In" : f === "stock_out" ? "Stock Out" : "Sales"}
               </button>
             ))}
             <button
@@ -606,23 +608,29 @@ export default function BarcodesPage() {
                       <td className="px-4 py-3 font-medium text-[#1c1810] dark:text-[#f0e8d8] max-w-[180px] truncate">
                         {scan.product_name || "—"}
                       </td>
-                      <td className="px-4 py-3 text-[#7a6a4a] dark:text-[#9a8a68]">{scan.size}ml</td>
+                      <td className="px-4 py-3 text-[#7a6a4a] dark:text-[#9a8a68]">{scan.size.endsWith("ml") ? scan.size : `${scan.size}ml`}</td>
                       <td className="px-4 py-3">
                         <span
                           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
                             scan.scan_type === "stock_in"
                               ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400"
+                              : scan.scan_type === "stock_out"
+                              ? "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400"
                               : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400"
                           }`}
                         >
                           {scan.scan_type === "stock_in" ? (
                             <><CheckCircle className="w-3 h-3" /> Stock In</>
+                          ) : scan.scan_type === "stock_out" ? (
+                            <><TrendingDown className="w-3 h-3" /> Stock Out</>
                           ) : (
                             <><TrendingUp className="w-3 h-3" /> Sale</>
                           )}
                         </span>
                       </td>
-                      <td className="px-4 py-3 font-semibold text-[#1c1810] dark:text-[#f0e8d8]">+{scan.quantity}</td>
+                      <td className={`px-4 py-3 font-semibold ${scan.scan_type === "stock_out" ? "text-orange-600 dark:text-orange-400" : "text-[#1c1810] dark:text-[#f0e8d8]"}`}>
+                        {scan.scan_type === "stock_out" ? `-${scan.quantity}` : `+${scan.quantity}`}
+                      </td>
                       <td className="px-4 py-3 text-[#7a6a4a] dark:text-[#9a8a68] text-xs">
                         <div className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />

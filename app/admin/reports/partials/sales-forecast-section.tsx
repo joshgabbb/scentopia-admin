@@ -171,7 +171,7 @@ export default function SalesForecastingSection() {
           </div>
           <div>
             <span className="font-semibold text-[#8B6914] dark:text-[#D4AF37] uppercase tracking-wide">Basis</span>
-            <span className="ml-2 text-[#1c1810] dark:text-[#f0e8d8]">Past Sales Trend from non-cancelled mobile app orders</span>
+            <span className="ml-2 text-[#1c1810] dark:text-[#f0e8d8]">Past sales trend from mobile app orders — Cancelled and Refunded excluded</span>
           </div>
         </div>
       </div>

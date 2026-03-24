@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { Truck, ExternalLink, Package, MapPin, Clock, Copy, Check, User, Phone } from 'lucide-react';
+import { Truck, ExternalLink, Package, MapPin, Clock, Copy, Check, User, Phone, Printer } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 
 interface Order {
@@ -248,7 +248,7 @@ export default function JntSidebar({ order, onClose, onStatusUpdate }: JntSideba
             day: 'numeric'
           }),
           zone: SHIPPING_ZONES[selectedZone].label,
-          status: 'Shipped',
+          status: 'To Ship',
           trackingUrl: `https://www.jtexpress.ph/index/query/gzquery.html?waybillnumber=${waybillNumber}`
         });
 
@@ -257,14 +257,14 @@ export default function JntSidebar({ order, onClose, onStatusUpdate }: JntSideba
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              status: 'Shipped',
-              title: 'Order Shipped via J&T Express',
-              body: `Your order has been shipped! Tracking number: ${waybillNumber}. Expected delivery: ${estimatedDelivery.toLocaleDateString('en-PH')}`
+              status: 'To Ship',
+              title: 'Waybill Created — Ready to Hand Off',
+              body: `Your order is packed and ready! Tracking number: ${waybillNumber}. Expected delivery: ${estimatedDelivery.toLocaleDateString('en-PH')}`
             })
           });
 
           if (statusResponse.ok) {
-            onStatusUpdate('Shipped');
+            onStatusUpdate('To Ship');
           }
         } catch (statusError) {
           // Status update failure is non-critical
@@ -287,6 +287,210 @@ export default function JntSidebar({ order, onClose, onStatusUpdate }: JntSideba
     }
   };
 
+  const handlePrintWaybill = () => {
+    if (!deliveryResult) return;
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Waybill – ${deliveryResult.waybillNumber}</title>
+        <style>
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body {
+            font-family: Arial, sans-serif;
+            background: #fff;
+            display: flex;
+            justify-content: center;
+            padding: 24px;
+          }
+          .label {
+            width: 100mm;
+            border: 2px solid #111;
+            font-size: 11px;
+            color: #111;
+          }
+          .header {
+            background: #e30613;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+          }
+          .header-brand { font-size: 20px; font-weight: 900; letter-spacing: 1px; }
+          .header-sub { font-size: 10px; opacity: 0.9; margin-top: 2px; }
+          .header-order { font-size: 10px; text-align: right; opacity: 0.9; }
+          .waybill-block {
+            background: #fff3f3;
+            border-bottom: 2px solid #111;
+            padding: 10px 14px;
+            text-align: center;
+          }
+          .waybill-label {
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: #e30613;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+          }
+          .waybill-number {
+            font-size: 22px;
+            font-weight: 900;
+            letter-spacing: 3px;
+            color: #e30613;
+            font-family: 'Courier New', monospace;
+          }
+          .waybill-bars {
+            display: flex;
+            justify-content: center;
+            gap: 2px;
+            margin-top: 6px;
+            height: 30px;
+            align-items: flex-end;
+          }
+          .bar { background: #111; }
+          .section {
+            border-bottom: 1px solid #ccc;
+            padding: 8px 14px;
+          }
+          .section:last-child { border-bottom: none; }
+          .section-title {
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: #e30613;
+            margin-bottom: 5px;
+          }
+          .section-value {
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1.4;
+          }
+          .section-sub {
+            font-size: 10px;
+            color: #444;
+            margin-top: 2px;
+          }
+          .row { display: flex; justify-content: space-between; gap: 8px; }
+          .col { flex: 1; }
+          .meta-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            padding: 8px 14px;
+            border-bottom: 1px solid #ccc;
+          }
+          .meta-item { }
+          .meta-key { font-size: 8px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+          .meta-val { font-size: 11px; font-weight: 700; margin-top: 1px; }
+          .footer {
+            background: #f5f5f5;
+            padding: 7px 14px;
+            text-align: center;
+            font-size: 9px;
+            color: #666;
+            border-top: 1px dashed #ccc;
+          }
+          @media print {
+            body { padding: 0; }
+            .no-print { display: none !important; }
+            .label { border: 2px solid #111; page-break-inside: avoid; }
+          }
+          .print-btn {
+            display: block;
+            margin: 16px auto 0;
+            padding: 8px 24px;
+            background: #e30613;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+          }
+        </style>
+      </head>
+      <body>
+        <div>
+          <div class="label">
+
+            <!-- Header -->
+            <div class="header">
+              <div>
+                <div class="header-brand">J&T EXPRESS</div>
+                <div class="header-sub">Philippines</div>
+              </div>
+              <div class="header-order">
+                <div style="font-size:9px;">ORDER REF.</div>
+                <div style="font-weight:700;">${order.orderNumber}</div>
+              </div>
+            </div>
+
+            <!-- Waybill Number -->
+            <div class="waybill-block">
+              <div class="waybill-label">Waybill Number</div>
+              <div class="waybill-number">${deliveryResult.waybillNumber}</div>
+              <div class="waybill-bars">
+                ${Array.from({ length: 48 }, (_, i) =>
+                  `<div class="bar" style="width:${i % 3 === 0 ? 3 : 2}px; height:${i % 5 === 0 ? 30 : i % 3 === 0 ? 22 : 16}px;"></div>`
+                ).join('')}
+              </div>
+            </div>
+
+            <!-- TO -->
+            <div class="section">
+              <div class="section-title">▼ To (Recipient)</div>
+              <div class="section-value">${recipientName || '—'}</div>
+              <div class="section-sub">${recipientPhone || ''}</div>
+              <div class="section-sub" style="margin-top:4px; line-height:1.5;">${fullAddress || '—'}</div>
+            </div>
+
+            <!-- FROM -->
+            <div class="section">
+              <div class="section-title">▲ From (Sender)</div>
+              <div class="section-value">Scentopia</div>
+              <div class="section-sub">Scentopia Official Store</div>
+            </div>
+
+            <!-- Shipment Details -->
+            <div class="meta-grid">
+              <div class="meta-item">
+                <div class="meta-key">Zone</div>
+                <div class="meta-val">${deliveryResult.zone}</div>
+              </div>
+              <div class="meta-item">
+                <div class="meta-key">Shipping Fee</div>
+                <div class="meta-val" style="color:#e30613;">₱${deliveryResult.shippingFee.toFixed(2)}</div>
+              </div>
+              <div class="meta-item">
+                <div class="meta-key">Weight</div>
+                <div class="meta-val">${packageWeight} kg</div>
+              </div>
+              <div class="meta-item">
+                <div class="meta-key">Est. Delivery</div>
+                <div class="meta-val" style="font-size:9px;">${deliveryResult.estimatedDelivery}</div>
+              </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="footer">
+              Printed ${new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}
+              &nbsp;·&nbsp; Scentopia Admin
+            </div>
+
+          </div>
+          <button class="print-btn no-print" onclick="window.print()">🖨 Print Waybill</button>
+        </div>
+      </body>
+      </html>
+    `);
+    win.document.close();
+  };
+
   // Conditional red-tint card classes for dark/light mode
   const redCardClass = isDark
     ? 'bg-red-900/20 border border-red-800/40'
@@ -299,12 +503,12 @@ export default function JntSidebar({ order, onClose, onStatusUpdate }: JntSideba
     return (
       <div className={`p-0 space-y-4 ${tc.bg}`}>
         {/* Success Header */}
-        <div className="bg-gradient-to-r from-green-600 to-green-700 -mx-6 -mt-6 px-6 py-6 mb-4 text-center">
+        <div className="bg-gradient-to-r from-amber-500 to-amber-600 -mx-6 -mt-6 px-6 py-6 mb-4 text-center">
           <div className={`w-14 h-14 ${tc.bg} rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg`}>
-            <Check size={28} className="text-green-600" />
+            <Package size={28} className="text-amber-500" />
           </div>
-          <h3 className="text-lg font-bold text-white tracking-wide">Shipment Created</h3>
-          <p className="text-green-100 text-sm mt-0.5">J&T Express delivery confirmed</p>
+          <h3 className="text-lg font-bold text-white tracking-wide">Waybill Ready</h3>
+          <p className="text-amber-100 text-sm mt-0.5">Print the waybill, then hand the package to J&T</p>
         </div>
 
         {/* Waybill Card */}
@@ -341,11 +545,20 @@ export default function JntSidebar({ order, onClose, onStatusUpdate }: JntSideba
           ))}
           <div className="flex justify-between items-center px-4 py-3">
             <span className={`text-sm ${tc.textMuted}`}>Status</span>
-            <span className="px-2.5 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
+            <span className="px-2.5 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-semibold">
               {deliveryResult.status}
             </span>
           </div>
         </div>
+
+        {/* Print Waybill Button */}
+        <button
+          onClick={handlePrintWaybill}
+          className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#1c1810] hover:bg-[#2e2820] text-white rounded-md font-semibold text-sm transition-colors shadow-md"
+        >
+          <Printer size={16} />
+          Print Waybill Label
+        </button>
 
         {/* Track Button */}
         {deliveryResult.trackingUrl && (
@@ -353,7 +566,7 @@ export default function JntSidebar({ order, onClose, onStatusUpdate }: JntSideba
             href={deliveryResult.trackingUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 text-white bg-red-600 hover:bg-red-700 py-2.5 rounded-md font-semibold text-sm transition-colors shadow-md"
+            className="flex items-center justify-center gap-2 text-red-600 border border-red-200 hover:bg-red-50 py-2.5 rounded-md font-semibold text-sm transition-colors"
           >
             <ExternalLink size={16} />
             Track on J&T Express
@@ -362,7 +575,7 @@ export default function JntSidebar({ order, onClose, onStatusUpdate }: JntSideba
 
         <div className={`${isDark ? 'bg-blue-900/20 border-blue-800/40 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-700'} border rounded-lg p-3`}>
           <p className="text-sm">
-            <strong>Customer Notified:</strong> The customer will receive a notification with the tracking number.
+            <strong>Customer Notified:</strong> The customer received a notification that their order is packed and ready. Once you hand the package to J&T, use the <strong>⋯ menu → Confirm Handoff to J&T</strong> to mark it as Shipped.
           </p>
         </div>
 

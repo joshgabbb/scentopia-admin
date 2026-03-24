@@ -58,13 +58,17 @@ export default function InventoryReportsSection() {
     fetchReport();
   }, [reportType]);
 
+  useEffect(() => {
+    if (reportType !== "stock-levels" && reportType !== "low-stock") return;
+    const timer = setTimeout(() => { fetchReport(); }, 600);
+    return () => clearTimeout(timer);
+  }, [threshold]);
+
   const handleExport = (options: ExportOptions) => {
     if (!data) return;
 
     if (reportType === "stock-levels" || reportType === "low-stock") {
-      const config = createStockLevelsConfig(data.products || []);
-      config.title = reportType === "low-stock" ? "Low Stock Alert Report" : "Stock Levels Report";
-      config.filename = reportType === "low-stock" ? "low_stock_report" : "stock_levels_report";
+      const config = createStockLevelsConfig(data.products || [], reportType);
       exportReport(config, options.format);
     }
     setShowExportModal(false);
@@ -81,8 +85,6 @@ export default function InventoryReportsSection() {
     switch (status?.toLowerCase()) {
       case "in stock":
         return "text-green-400 bg-green-500/20";
-      case "medium stock":
-        return "text-yellow-400 bg-yellow-500/20";
       case "low stock":
         return "text-orange-400 bg-orange-500/20";
       case "out of stock":
@@ -124,6 +126,8 @@ export default function InventoryReportsSection() {
         <tr className="text-left text-[#7a6a4a] dark:text-[#9a8a68] text-sm">
           <th className="py-3 px-4">Product</th>
           <th className="py-3 px-4">Category</th>
+          <th className="py-3 px-4">Type</th>
+          <th className="py-3 px-4">Size</th>
           <th className="py-3 px-4">Price</th>
           <th className="py-3 px-4">Stock</th>
           <th className="py-3 px-4">Status</th>
@@ -135,6 +139,8 @@ export default function InventoryReportsSection() {
       <tr className="text-left text-[#7a6a4a] dark:text-[#9a8a68] text-sm">
         <th className="py-3 px-4">Product</th>
         <th className="py-3 px-4">Category</th>
+        <th className="py-3 px-4">Type</th>
+        <th className="py-3 px-4">Sizes</th>
         <th className="py-3 px-4">Price</th>
         <th className="py-3 px-4">Stock</th>
         <th className="py-3 px-4">Status</th>
@@ -171,6 +177,12 @@ export default function InventoryReportsSection() {
         <tr key={index} className="border-t border-[#d4af37]/10 hover:bg-[#faf8f3]/50 dark:hover:bg-white/5">
           <td className="py-3 px-4 text-[#1c1810] dark:text-[#f0e8d8]">{row.name}</td>
           <td className="py-3 px-4 text-[#7a6a4a] dark:text-[#9a8a68]">{row.category}</td>
+          <td className="py-3 px-4">
+            <span className={`px-2 py-1 text-xs rounded ${row.perfumeType === 'Premium' ? 'bg-purple-500/20 text-purple-400' : 'bg-blue-500/20 text-blue-400'}`}>
+              {row.perfumeType}
+            </span>
+          </td>
+          <td className="py-3 px-4 text-[#7a6a4a] dark:text-[#9a8a68] text-sm">{row.size || '—'}</td>
           <td className="py-3 px-4 text-[#d4af37]">{formatCurrency(row.price)}</td>
           <td className="py-3 px-4 text-[#1c1810] dark:text-[#f0e8d8] font-medium">{row.stock}</td>
           <td className="py-3 px-4">
@@ -190,6 +202,12 @@ export default function InventoryReportsSection() {
       <tr key={index} className="border-t border-[#d4af37]/10 hover:bg-[#faf8f3]/50 dark:hover:bg-white/5">
         <td className="py-3 px-4 text-[#1c1810] dark:text-[#f0e8d8]">{row.name}</td>
         <td className="py-3 px-4 text-[#7a6a4a] dark:text-[#9a8a68]">{row.category}</td>
+        <td className="py-3 px-4">
+          <span className={`px-2 py-1 text-xs rounded ${row.perfumeType === 'Premium' ? 'bg-purple-500/20 text-purple-400' : 'bg-blue-500/20 text-blue-400'}`}>
+            {row.perfumeType}
+          </span>
+        </td>
+        <td className="py-3 px-4 text-[#7a6a4a] dark:text-[#9a8a68] text-sm">{row.size || '—'}</td>
         <td className="py-3 px-4 text-[#d4af37]">{formatCurrency(row.price)}</td>
         <td className="py-3 px-4 text-[#1c1810] dark:text-[#f0e8d8] font-medium">{row.stock}</td>
         <td className="py-3 px-4">
@@ -225,7 +243,13 @@ export default function InventoryReportsSection() {
           </div>
           <div>
             <span className="font-semibold text-[#8B6914] dark:text-[#D4AF37] uppercase tracking-wide">Thresholds</span>
-            <span className="ml-2 text-[#1c1810] dark:text-[#f0e8d8]">Out of Stock = 0 · Low Stock ≤ threshold · Medium Stock ≤ 25</span>
+            <span className="ml-2 text-[#1c1810] dark:text-[#f0e8d8]">
+              {reportType === "stock-levels"
+                ? `Out of Stock = 0 · Low Stock ≤ ${threshold} · In Stock > ${threshold}`
+                : reportType === "low-stock"
+                ? `Showing products with stock ≤ ${threshold} · Priority: Critical = 0, High ≤ 5, Medium = rest`
+                : "Last 200 stock movements — IN and OUT operations"}
+            </span>
           </div>
         </div>
       </div>
@@ -242,7 +266,7 @@ export default function InventoryReportsSection() {
             <option value="low-stock">Low Stock Alert</option>
             <option value="movement">Stock Movement</option>
           </select>
-          {reportType === "low-stock" && (
+          {(reportType === "low-stock" || reportType === "stock-levels") && (
             <div className="flex items-center gap-2">
               <span className="text-sm text-[#7a6a4a] dark:text-[#9a8a68]">Threshold:</span>
               <input
@@ -319,13 +343,13 @@ export default function InventoryReportsSection() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={reportType === "movement" ? 7 : 6} className="py-8 text-center text-[#7a6a4a] dark:text-[#9a8a68]">
+                  <td colSpan={reportType === "movement" ? 7 : 8} className="py-8 text-center text-[#7a6a4a] dark:text-[#9a8a68]">
                     Loading...
                   </td>
                 </tr>
               ) : getDataRows().length === 0 ? (
                 <tr>
-                  <td colSpan={reportType === "movement" ? 7 : 6} className="py-8 text-center text-[#7a6a4a] dark:text-[#9a8a68]">
+                  <td colSpan={reportType === "movement" ? 7 : 8} className="py-8 text-center text-[#7a6a4a] dark:text-[#9a8a68]">
                     No data available
                   </td>
                 </tr>

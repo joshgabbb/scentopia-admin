@@ -26,7 +26,7 @@ interface Order {
   customerName: string;
   customerEmail: string;
   amount: number;
-  status: 'Pending' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
+  status: 'Pending' | 'Processing' | 'To Ship' | 'Shipped' | 'Delivered' | 'Cancelled';
   createdAt: string;
   orderNumber: string;
   itemCount: number;
@@ -98,6 +98,8 @@ const getStatusColor = (status: string) => {
       return 'bg-yellow-900/20 text-yellow-400 border border-yellow-400/30';
     case 'processing':
       return 'bg-blue-900/20 text-blue-400 border border-blue-400/30';
+    case 'to ship':
+      return 'bg-amber-900/20 text-amber-500 border border-amber-500/30';
     case 'shipped':
       return 'bg-purple-900/20 text-purple-400 border border-purple-400/30';
     case 'delivered':
@@ -121,6 +123,8 @@ const getFulfillmentStatus = (orderStatus: string) => {
   switch (orderStatus) {
     case 'Delivered':
       return { status: 'FULFILLED', color: 'bg-green-900/20 text-green-400 border border-green-400/30' };
+    case 'To Ship':
+      return { status: 'AWAITING HANDOFF', color: 'bg-amber-900/20 text-amber-500 border border-amber-500/30' };
     case 'Shipped':
       return { status: 'PARTIALLY FULFILLED', color: 'bg-blue-900/20 text-blue-400 border border-blue-400/30' };
     case 'Processing':
@@ -234,6 +238,37 @@ const OrderActionsDropdown = ({
               <span>J&T Express</span>
             </button>
           </>
+        );
+
+      case 'To Ship':
+        return (
+          <button
+            onClick={async () => {
+              setIsUpdating(true);
+              setIsOpen(false);
+              try {
+                await fetch(`/api/admin/orders/${order.id}/status`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    status: 'Shipped',
+                    title: 'Order Handed to J&T Express',
+                    body: 'Your order has been handed to J&T Express and is now on its way.',
+                  }),
+                });
+                onStatusUpdate('Shipped');
+              } catch (error) {
+                console.error('Failed to update status:', error);
+              } finally {
+                setIsUpdating(false);
+              }
+            }}
+            disabled={isUpdating}
+            className="w-full text-left px-4 py-2 text-sm text-[#1c1810] dark:text-[#f0e8d8] hover:bg-amber-500/10 flex items-center gap-2 disabled:opacity-50 transition-colors"
+          >
+            <Truck size={16} className="text-amber-500" />
+            {isUpdating ? 'Updating...' : 'Confirm Handoff to J&T'}
+          </button>
         );
 
       default:
@@ -458,27 +493,29 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
                   style={{
                     zIndex: 0,
                     width: currentOrder.status === 'Pending' ? '0%'
-                      : currentOrder.status === 'Processing' ? '33%'
-                      : currentOrder.status === 'Shipped' ? '66%'
+                      : currentOrder.status === 'Processing' ? '25%'
+                      : currentOrder.status === 'To Ship' ? '50%'
+                      : currentOrder.status === 'Shipped' ? '75%'
                       : '100%',
                   }}
                 />
                 {(
                   [
-                    { key: 'Pending',    label: 'Order Placed',     sub: 'Awaiting processing' },
-                    { key: 'Processing', label: 'Processing',       sub: 'Being prepared' },
-                    { key: 'Shipped',    label: 'Shipped',          sub: 'On the way' },
-                    { key: 'Delivered',  label: 'Order Received',   sub: 'Delivered' },
+                    { key: 'Pending',    label: 'Ordered',    sub: 'Awaiting processing' },
+                    { key: 'Processing', label: 'Processing', sub: 'Being prepared' },
+                    { key: 'To Ship',    label: 'Packed',     sub: 'Ready to hand off' },
+                    { key: 'Shipped',    label: 'Shipped',    sub: 'On the way' },
+                    { key: 'Delivered',  label: 'Delivered',  sub: 'Order received' },
                   ] as const
                 ).map((step, i, arr) => {
-                  const statuses = ['Pending', 'Processing', 'Shipped', 'Delivered'] as const;
+                  const statuses = ['Pending', 'Processing', 'To Ship', 'Shipped', 'Delivered'] as const;
                   const currentIdx = statuses.indexOf(currentOrder.status as typeof statuses[number]);
                   const stepIdx = statuses.indexOf(step.key);
                   const isComplete  = stepIdx < currentIdx;
                   const isCurrent   = stepIdx === currentIdx;
                   const isPending   = stepIdx > currentIdx;
                   return (
-                    <div key={step.key} className="relative flex flex-col items-center flex-1" style={{ zIndex: 1 }}>
+                    <div key={step.key} className="relative flex flex-col items-center flex-1 min-w-0" style={{ zIndex: 1 }}>
                       <div
                         className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300
                           ${isComplete ? 'bg-[#d4af37] border-[#d4af37]'
@@ -514,12 +551,17 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
                 )}
                 {currentOrder.status === 'Processing' && (
                   <p className="text-xs text-[#7a6a4a] text-center">
-                    Use the <span className="font-semibold text-[#8B6914]">⋯ menu</span> → <span className="font-semibold text-[#8B6914]">J&T Express</span> when ready to ship
+                    Use the <span className="font-semibold text-[#8B6914]">⋯ menu</span> → <span className="font-semibold text-[#8B6914]">J&T Express</span> to generate the waybill while packing
+                  </p>
+                )}
+                {currentOrder.status === 'To Ship' && (
+                  <p className="text-xs text-[#7a6a4a] text-center">
+                    Use the <span className="font-semibold text-amber-600">⋯ menu</span> → <span className="font-semibold text-amber-600">Confirm Handoff to J&T</span> once you hand the package to the courier
                   </p>
                 )}
                 {currentOrder.status === 'Shipped' && (
                   <p className="text-xs text-[#7a6a4a] text-center">
-                    Waiting for the customer to confirm receipt
+                    Package handed to J&T Express — waiting for customer to confirm receipt
                   </p>
                 )}
                 {currentOrder.status === 'Delivered' && (

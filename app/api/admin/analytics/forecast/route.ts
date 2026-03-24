@@ -57,7 +57,7 @@ export async function GET(request: Request) {
 
     const { data: orders, error } = await supabase
       .from('orders')
-      .select('amount, created_at')
+      .select('amount, created_at, order_status')
       .gte('created_at', twelveMonthsAgo.toISOString())
       .neq('order_status', 'Cancelled')
       .order('created_at', { ascending: true });
@@ -83,6 +83,7 @@ export async function GET(request: Request) {
     const monthlyMap: Record<string, MonthlyData> = {};
 
     for (const order of orders) {
+      if (order.order_status === 'Refunded') continue;
       const date = new Date(order.created_at);
       if (isNaN(date.getTime())) continue;
 

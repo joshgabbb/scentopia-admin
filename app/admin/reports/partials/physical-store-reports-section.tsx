@@ -339,7 +339,7 @@ export default function PhysicalStoreReportsSection() {
           </div>
           <div>
             <span className="font-semibold text-[#8B6914] dark:text-[#D4AF37] uppercase tracking-wide">Includes</span>
-            <span className="ml-2 text-[#1c1810] dark:text-[#f0e8d8]">Physical store (POS) transactions only</span>
+            <span className="ml-2 text-[#1c1810] dark:text-[#f0e8d8]">Physical store (POS) transactions only — all transactions, no status filter</span>
           </div>
           <div>
             <span className="font-semibold text-[#8B6914] dark:text-[#D4AF37] uppercase tracking-wide">Calculation</span>

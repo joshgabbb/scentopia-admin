@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
 // User status types
-type UserStatus = 'active' | 'inactive' | 'suspended';
+type UserStatus = 'active' | 'inactive' | 'suspended' | 'deactivated';
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();

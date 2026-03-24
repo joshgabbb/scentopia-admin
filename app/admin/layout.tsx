@@ -76,8 +76,10 @@ const menuItems: MenuItem[] = [
     icon: Layers,
     children: [
       { id: "stock-in", label: "Stock In", icon: ArrowDownToLine },
+      { id: "stock-out", label: "Stock Out", icon: ArrowUpFromLine },
       { id: "stock-history", label: "Stock History", icon: ClipboardList },
       { id: "pos", label: "POS / Store Sales", icon: ShoppingBag },
+      { id: "purchase-orders", label: "Purchase Orders", icon: FileText },
     ],
   },
   {
@@ -417,7 +419,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     const productChildIds = ["products", "categories", "tags", "sizes", "archived", "fast-moving", "slow-moving", "barcodes"];
     const clientChildIds = ["users", "users-archived"];
     const managementChildIds = ["audit-trails", "feedback", "notifications", "inventory-alerts", "refunds", "vouchers"];
-    const inventoryChildIds = ["stock-in", "stock-history", "pos"];
+    const inventoryChildIds = ["stock-in", "stock-out", "stock-history", "pos"];
     if (productChildIds.includes(currentPageId)) {
       setExpandedMenus(prev => new Set([...prev, "products"]));
     }

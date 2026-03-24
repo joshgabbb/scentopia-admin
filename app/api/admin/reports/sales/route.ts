@@ -74,6 +74,7 @@ async function getSalesByPeriod(
   const aggregated: Record<string, { orderCount: number; revenue: number; itemsSold: number }> = {};
 
   orders?.forEach((order: any) => {
+    if (order.order_status === 'Refunded') return;
     const date = new Date(order.created_at);
     let periodKey: string;
 
@@ -155,7 +156,7 @@ async function getSalesByCategory(
   // Filter by date and non-cancelled status
   const filteredItems = orderItems?.filter((item: any) => {
     const order = item.orders;
-    if (!order || order.order_status === 'Cancelled') return false;
+    if (!order || order.order_status === 'Cancelled' || order.order_status === 'Refunded') return false;
 
     const orderDate = new Date(order.created_at);
     if (dateFilter.from && orderDate < new Date(dateFilter.from)) return false;
@@ -238,7 +239,7 @@ async function getSalesByProduct(
   // Filter by date and non-cancelled status
   const filteredItems = orderItems?.filter((item: any) => {
     const order = item.orders;
-    if (!order || order.order_status === 'Cancelled') return false;
+    if (!order || order.order_status === 'Cancelled' || order.order_status === 'Refunded') return false;
 
     const orderDate = new Date(order.created_at);
     if (dateFilter.from && orderDate < new Date(dateFilter.from)) return false;

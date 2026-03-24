@@ -49,7 +49,7 @@ interface Order {
   voucherCode?: string | null;
   discountAmount?: number;
   originalAmount?: number | null;
-  status: "Pending" | "Processing" | "Shipped" | "Delivered" | "Cancelled";
+  status: "Pending" | "Processing" | "To Ship" | "Shipped" | "Delivered" | "Cancelled";
   createdAt: string;
   orderNumber: string;
   itemCount: number;
@@ -107,6 +107,8 @@ const getStatusColor = (status: string) => {
       return "bg-yellow-900/20 text-yellow-400 border border-yellow-400/30";
     case "Processing":
       return "bg-blue-900/20 text-blue-400 border border-blue-400/30";
+    case "To Ship":
+      return "bg-amber-900/20 text-amber-500 border border-amber-500/30";
     case "Shipped":
       return "bg-purple-900/20 text-purple-400 border border-purple-400/30";
     case "Delivered":
@@ -739,6 +741,7 @@ const executeExport = () => {
             <option value="all">All order statuses</option>
             <option value="Pending">Pending</option>
             <option value="Processing">Processing</option>
+            <option value="To Ship">To Ship</option>
             <option value="Shipped">Shipped</option>
             <option value="Delivered">Delivered</option>
             <option value="Cancelled">Cancelled</option>
@@ -992,6 +995,7 @@ const executeExport = () => {
                   <option value="all">All Statuses</option>
                   <option value="Pending">Pending</option>
                   <option value="Processing">Processing</option>
+                  <option value="To Ship">To Ship</option>
                   <option value="Shipped">Shipped</option>
                   <option value="Delivered">Delivered</option>
                   <option value="Cancelled">Cancelled</option>
@@ -1119,6 +1123,7 @@ const executeExport = () => {
                   <option value="">Don't change</option>
                   <option value="Pending">Pending</option>
                   <option value="Processing">Processing</option>
+                  <option value="To Ship">To Ship</option>
                   <option value="Shipped">Shipped</option>
                   <option value="Delivered">Delivered</option>
                   <option value="Cancelled">Cancelled</option>

@@ -117,7 +117,9 @@ async function getOrdersFulfillmentReport(
     return acc;
   }, {});
 
-  const totalRevenue = formattedOrders.reduce((sum, o) => sum + o.amount, 0);
+  const totalRevenue = formattedOrders
+    .filter(o => o.status !== 'Cancelled' && o.status !== 'Refunded')
+    .reduce((sum, o) => sum + o.amount, 0);
 
   return NextResponse.json({
     success: true,

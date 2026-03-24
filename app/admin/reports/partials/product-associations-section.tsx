@@ -233,7 +233,7 @@ export default function ProductAssociationsSection() {
           </div>
           <div>
             <span className="font-semibold text-[#8B6914] dark:text-[#D4AF37] uppercase tracking-wide">Basis</span>
-            <span className="ml-2 text-[#1c1810] dark:text-[#f0e8d8]">Non-cancelled orders within the selected time period</span>
+            <span className="ml-2 text-[#1c1810] dark:text-[#f0e8d8]">Mobile app orders within the selected time period — Cancelled and Refunded excluded</span>
           </div>
         </div>
       </div>

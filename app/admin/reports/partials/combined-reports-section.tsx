@@ -292,7 +292,7 @@ export default function CombinedReportsSection() {
           <div>
             <span className="font-semibold text-[#8B6914] dark:text-[#D4AF37] uppercase tracking-wide">App Source</span>
             <span className="ml-2 text-[#1c1810] dark:text-[#f0e8d8]">
-              <code className="bg-[#f2ede4] dark:bg-[#26231a] px-1 rounded">orders</code> + <code className="bg-[#f2ede4] dark:bg-[#26231a] px-1 rounded">order_items</code> — non-Cancelled
+              <code className="bg-[#f2ede4] dark:bg-[#26231a] px-1 rounded">orders</code> + <code className="bg-[#f2ede4] dark:bg-[#26231a] px-1 rounded">order_items</code> — non-Cancelled, non-Refunded
             </span>
           </div>
           <div>
@@ -303,7 +303,7 @@ export default function CombinedReportsSection() {
           </div>
           <div>
             <span className="font-semibold text-[#8B6914] dark:text-[#D4AF37] uppercase tracking-wide">Calculation</span>
-            <span className="ml-2 text-[#1c1810] dark:text-[#f0e8d8]">Revenue = app order amounts + POS transaction amounts, merged by period — no double counting</span>
+            <span className="ml-2 text-[#1c1810] dark:text-[#f0e8d8]">Revenue = app order amounts (excl. Cancelled &amp; Refunded) + POS transaction amounts, merged by period — no double counting</span>
           </div>
         </div>
       </div>

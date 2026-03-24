@@ -100,6 +100,7 @@ async function getCombinedByPeriod(
 
   // Aggregate mobile orders
   orders?.forEach((order: any) => {
+    if (order.order_status === "Refunded") return;
     const key = getPeriodKey(new Date(order.created_at), period);
     ensurePeriod(key);
     aggregated[key].appCount += 1;
@@ -204,7 +205,7 @@ async function getCombinedByProduct(
   // Process mobile app items
   appItems?.forEach((item: any) => {
     const order = item.orders;
-    if (!order || order.order_status === "Cancelled") return;
+    if (!order || order.order_status === "Cancelled" || order.order_status === "Refunded") return;
 
     const date = new Date(order.created_at);
     if (dateFilter.from && date < new Date(dateFilter.from)) return;
