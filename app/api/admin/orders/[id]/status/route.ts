@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/server";
+import { logAuditAction } from "@/lib/audit-logger";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function PATCH(
@@ -28,6 +29,16 @@ export async function PATCH(
       }
     }
 
+    // Fetch current order status and order number for audit log
+    const { data: currentOrder } = await supabase
+      .from('orders')
+      .select('order_status, order_number')
+      .eq('id', orderId)
+      .maybeSingle();
+
+    const previousStatus = currentOrder?.order_status ?? null;
+    const orderNumber = currentOrder?.order_number ?? orderId;
+
     // Update order status
     const { error: orderError } = await supabase
       .from('orders')
@@ -38,6 +49,24 @@ export async function PATCH(
       .eq('id', orderId);
 
     if (orderError) throw orderError;
+
+    // Log order status change to audit trail (non-critical)
+    try {
+      await logAuditAction(
+        {
+          action: 'UPDATE',
+          module: 'ORDER',
+          entityId: orderId,
+          entityLabel: `Order #${orderNumber}`,
+          oldValue: { status: previousStatus },
+          newValue: { status },
+          metadata: { changed_via: 'admin_dashboard' },
+        },
+        request
+      );
+    } catch {
+      // Non-critical, continue
+    }
 
     // Add tracking entry (non-critical — never fail the whole request)
     try {
