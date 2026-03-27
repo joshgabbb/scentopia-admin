@@ -3,6 +3,8 @@ import { EnvVarWarning } from "@/components/env-var-warning";
 import { hasEnvVars } from "@/lib/utils";
 import Link from "next/link";
 import { ThemeSwitcher } from "@/components/theme-switcher";
+import Image from "next/image";
+import mbtLogo from "@/public/assets/images/general/MBT.jpg";
 
 export default function Home() {
   return (
@@ -18,9 +20,11 @@ export default function Home() {
       <nav className="relative w-full border-b border-[#e8e0d0] dark:border-[#2e2a1e] bg-white/90 dark:bg-[#100f0c]/90 backdrop-blur-sm sticky top-0 z-50 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-5 sm:px-8 py-4 flex justify-between items-center">
           <Link href="/" className="group flex items-center gap-3">
-            <div className="w-7 h-7 bg-[#D4AF37] flex items-center justify-center rounded-sm flex-shrink-0">
-              <span className="text-[#1c1810] text-xs font-bold tracking-tighter">S</span>
-            </div>
+            <Image
+              src={mbtLogo}
+              alt="MBT Logo"
+              className="w-9 h-9 object-contain rounded-full flex-shrink-0"
+            />
             <h1 className="text-lg font-bold tracking-[0.25em] text-[#1c1810] dark:text-[#f0e8d8] group-hover:text-[#8B6914] dark:group-hover:text-[#D4AF37] transition-colors duration-200">
               SCENTOPIA
             </h1>

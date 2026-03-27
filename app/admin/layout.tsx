@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import logo from "@/public/assets/images/general/stp-transparent-logo-light.png";
+import mbtLogo from "@/public/assets/images/general/MBT.jpg";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { ThemeProvider, useTheme } from "@/contexts/ThemeContext";
@@ -480,7 +481,12 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     <div className={`min-h-screen ${themeClasses.bg} flex transition-colors duration-200`}>
       {shouldShowNavDetails && (
         <div className={`w-16 lg:w-64 ${themeClasses.bgSecondary} border-r ${themeClasses.border} flex-shrink-0 transition-colors duration-200`}>
-          <div className={`hidden h-[74px] lg:flex items-center justify-start p-6 border-b ${themeClasses.border}`}>
+          <div className={`hidden h-[74px] lg:flex items-center justify-start p-6 border-b ${themeClasses.border} gap-3`}>
+            <Image
+              src={mbtLogo}
+              alt="MBT Logo"
+              className="w-9 h-9 object-contain rounded-full"
+            />
             <h1 className={`text-lg font-semibold ${themeClasses.accent} tracking-[3px]`}>SCENTOPIA</h1>
           </div>
           <div className={`lg:hidden flex items-center justify-center p-4 border-b ${themeClasses.border}`}>
