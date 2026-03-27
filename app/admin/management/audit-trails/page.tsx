@@ -655,9 +655,9 @@ export default function AuditTrailsPage() {
               </button>
             )}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2">
-            {/* Search */}
-            <div className="relative xl:col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            {/* Search — full width on its own row */}
+            <div className="relative sm:col-span-2 lg:col-span-4">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9a8a6a]" />
               <input
                 type="text"
@@ -694,33 +694,31 @@ export default function AuditTrailsPage() {
                 </option>
               ))}
             </select>
-            {/* Date range */}
-            <div className="flex items-center gap-1.5 sm:col-span-2 lg:col-span-1">
-              <div className="relative flex-1">
-                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#9a8a6a]" />
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => applyFilter(setDateFrom, e.target.value)}
-                  className="w-full pl-8 pr-2 py-2 border border-[#e8e0d0] bg-white text-[#1c1810] text-sm
-                    rounded-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40 focus:border-[#D4AF37]
-                    transition-colors"
-                  title="From date"
-                />
-              </div>
-              <span className="text-[#9a8a6a] text-xs shrink-0">to</span>
-              <div className="relative flex-1">
-                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#9a8a6a]" />
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => applyFilter(setDateTo, e.target.value)}
-                  className="w-full pl-8 pr-2 py-2 border border-[#e8e0d0] bg-white text-[#1c1810] text-sm
-                    rounded-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40 focus:border-[#D4AF37]
-                    transition-colors"
-                  title="To date"
-                />
-              </div>
+            {/* Date from */}
+            <div className="relative">
+              <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#9a8a6a]" />
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => applyFilter(setDateFrom, e.target.value)}
+                className="w-full pl-8 pr-2 py-2 border border-[#e8e0d0] bg-white text-[#1c1810] text-sm
+                  rounded-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40 focus:border-[#D4AF37]
+                  transition-colors"
+                title="From date"
+              />
+            </div>
+            {/* Date to */}
+            <div className="relative">
+              <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#9a8a6a]" />
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => applyFilter(setDateTo, e.target.value)}
+                className="w-full pl-8 pr-2 py-2 border border-[#e8e0d0] bg-white text-[#1c1810] text-sm
+                  rounded-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40 focus:border-[#D4AF37]
+                  transition-colors"
+                title="To date"
+              />
             </div>
           </div>
 
