@@ -122,9 +122,6 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [user, setUser] = useState<{ id: string; email: string; firstName: string; lastName: string; phone: string } | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [showAccountSettings, setShowAccountSettings] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // ── Real inventory alert bell ─────────────────────────────────────────
   type BellAlert = { id: string; productName: string; message: string; severity: "critical" | "high"; stock: number };
@@ -196,16 +193,6 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval);
   }, [fetchRefundBell]);
 
-  // Account settings form
-  const [accountForm, setAccountForm] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    newPassword: '',
-    confirmPassword: '',
-  });
-
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
   // refundBellRef declared above with state
@@ -241,14 +228,6 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
         };
 
         setUser(userData);
-        setAccountForm({
-          firstName: userData.firstName,
-          lastName: userData.lastName,
-          email: userData.email,
-          phone: userData.phone,
-          newPassword: '',
-          confirmPassword: '',
-        });
       } catch (error) {
         console.error('Error fetching user:', error);
       }
@@ -281,7 +260,6 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
         setIsUserMenuOpen(false);
         setIsNotificationsOpen(false);
         setIsRefundBellOpen(false);
-        setShowAccountSettings(false);
       }
     };
 
@@ -306,94 +284,6 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoggingOut(false);
       setIsUserMenuOpen(false);
-    }
-  };
-
-  const handleSaveAccountSettings = async () => {
-    // Validate user exists
-    if (!user || !user.id) {
-      setSaveMessage({ type: 'error', text: 'User session not found. Please log in again.' });
-      return;
-    }
-
-    setIsSaving(true);
-    setSaveMessage(null);
-
-    try {
-      const supabase = createClient();
-
-      // Validate password if provided
-      if (accountForm.newPassword) {
-        if (accountForm.newPassword !== accountForm.confirmPassword) {
-          throw new Error('New passwords do not match');
-        }
-        if (accountForm.newPassword.length < 6) {
-          throw new Error('Password must be at least 6 characters');
-        }
-      }
-
-      // Update profile data
-      const { data: updateData, error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          first_name: accountForm.firstName,
-          last_name: accountForm.lastName,
-          phone: accountForm.phone || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', user.id)
-        .select();
-
-      if (profileError) {
-        console.error('Profile update error:', profileError);
-        throw new Error(profileError.message || 'Failed to update profile');
-      }
-
-      console.log('Profile updated:', updateData);
-
-      // Update password if provided
-      if (accountForm.newPassword) {
-        const { error: passwordError } = await supabase.auth.updateUser({
-          password: accountForm.newPassword,
-        });
-
-        if (passwordError) {
-          console.error('Password update error:', passwordError);
-          throw new Error(passwordError.message || 'Failed to update password');
-        }
-      }
-
-      // Update local user state
-      setUser(prev => prev ? {
-        ...prev,
-        firstName: accountForm.firstName,
-        lastName: accountForm.lastName,
-        phone: accountForm.phone,
-      } : null);
-
-      // Clear password fields
-      setAccountForm(prev => ({
-        ...prev,
-        newPassword: '',
-        confirmPassword: '',
-      }));
-
-      setSaveMessage({ type: 'success', text: 'Account settings saved successfully!' });
-
-      // Auto close after success
-      setTimeout(() => {
-        setShowAccountSettings(false);
-        setSaveMessage(null);
-      }, 2000);
-
-    } catch (error) {
-      console.error('Save error:', error);
-      setSaveMessage({
-        type: 'error',
-        text: error instanceof Error ? error.message : 'Failed to save settings'
-      });
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -849,18 +739,6 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
 
                       {/* Menu Items */}
                       <div className="py-2">
-                        <button
-                          onClick={() => {
-                            setShowAccountSettings(true);
-                            setIsUserMenuOpen(false);
-                          }}
-                          className={`w-full px-4 py-2.5 flex items-center gap-3 text-left ${themeClasses.hoverBg} transition-colors`}
-                        >
-                          <Settings className={`w-4 h-4 ${themeClasses.textMuted}`} />
-                          <span className={`text-sm ${themeClasses.text}`}>Account Settings</span>
-                          <ChevronRight className={`w-4 h-4 ${themeClasses.textMuted} ml-auto`} />
-                        </button>
-
                         <div className={`border-t ${themeClasses.border} my-2`}></div>
 
                         <button
@@ -931,144 +809,6 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
         ))}
       </div>
 
-      {/* Account Settings Modal */}
-      {showAccountSettings && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className={`${themeClasses.bgSecondary} border ${themeClasses.border} w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl transition-colors duration-200`}>
-            <div className={`px-6 py-4 border-b ${themeClasses.border} flex items-center justify-between sticky top-0 ${themeClasses.bgSecondary} z-10`}>
-              <h2 className={`text-lg font-semibold ${themeClasses.accent}`}>Account Settings</h2>
-              <button
-                onClick={() => {
-                  setShowAccountSettings(false);
-                  setSaveMessage(null);
-                }}
-                className={`p-1 ${themeClasses.textMuted} ${themeClasses.hoverBg} rounded transition-colors`}
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-6">
-              {/* Save Message */}
-              {saveMessage && (
-                <div className={`p-4 rounded ${saveMessage.type === 'success' ? 'bg-green-500/20 border border-green-500/30 text-green-600' : 'bg-red-500/20 border border-red-500/30 text-red-600'}`}>
-                  <p className="font-medium">{saveMessage.text}</p>
-                </div>
-              )}
-
-              {/* Profile Information */}
-              <div>
-                <h3 className={`text-sm font-semibold ${themeClasses.accent} mb-4 uppercase tracking-wide`}>Profile Information</h3>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>First Name</label>
-                      <input
-                        type="text"
-                        value={accountForm.firstName}
-                        onChange={(e) => setAccountForm({ ...accountForm, firstName: e.target.value })}
-                        className={`w-full px-3 py-2.5 ${themeClasses.inputBg} border ${themeClasses.border} ${themeClasses.text} focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent rounded transition-colors`}
-                        placeholder="John"
-                      />
-                    </div>
-                    <div>
-                      <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>Last Name</label>
-                      <input
-                        type="text"
-                        value={accountForm.lastName}
-                        onChange={(e) => setAccountForm({ ...accountForm, lastName: e.target.value })}
-                        className={`w-full px-3 py-2.5 ${themeClasses.inputBg} border ${themeClasses.border} ${themeClasses.text} focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent rounded transition-colors`}
-                        placeholder="Doe"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>Email Address</label>
-                    <input
-                      type="email"
-                      value={accountForm.email}
-                      disabled
-                      className={`w-full px-3 py-2.5 ${themeClasses.bgTertiary} border ${themeClasses.border} ${themeClasses.textMuted} cursor-not-allowed rounded`}
-                    />
-                    <p className={`text-xs ${themeClasses.textMuted} mt-1.5`}>Email cannot be changed</p>
-                  </div>
-
-                  <div>
-                    <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>Phone Number</label>
-                    <input
-                      type="tel"
-                      value={accountForm.phone}
-                      onChange={(e) => setAccountForm({ ...accountForm, phone: e.target.value })}
-                      className={`w-full px-3 py-2.5 ${themeClasses.inputBg} border ${themeClasses.border} ${themeClasses.text} focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent rounded transition-colors`}
-                      placeholder="+63 912 345 6789"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Change Password */}
-              <div className={`pt-6 border-t ${themeClasses.border}`}>
-                <h3 className={`text-sm font-semibold ${themeClasses.accent} mb-4 uppercase tracking-wide`}>Change Password</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>New Password</label>
-                    <input
-                      type="password"
-                      value={accountForm.newPassword}
-                      onChange={(e) => setAccountForm({ ...accountForm, newPassword: e.target.value })}
-                      className={`w-full px-3 py-2.5 ${themeClasses.inputBg} border ${themeClasses.border} ${themeClasses.text} focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent rounded transition-colors`}
-                      placeholder="Enter new password"
-                    />
-                  </div>
-
-                  <div>
-                    <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>Confirm New Password</label>
-                    <input
-                      type="password"
-                      value={accountForm.confirmPassword}
-                      onChange={(e) => setAccountForm({ ...accountForm, confirmPassword: e.target.value })}
-                      className={`w-full px-3 py-2.5 ${themeClasses.inputBg} border ${themeClasses.border} ${themeClasses.text} focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent rounded transition-colors`}
-                      placeholder="Confirm new password"
-                    />
-                  </div>
-                  <p className={`text-xs ${themeClasses.textMuted}`}>Leave blank to keep current password. Minimum 6 characters.</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className={`px-6 py-4 border-t ${themeClasses.border} flex items-center justify-end gap-3 sticky bottom-0 ${themeClasses.bgSecondary}`}>
-              <button
-                onClick={() => {
-                  setShowAccountSettings(false);
-                  setSaveMessage(null);
-                }}
-                className={`px-5 py-2.5 border ${themeClasses.border} ${themeClasses.text} ${themeClasses.hoverBg} transition-colors rounded font-medium`}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveAccountSettings}
-                disabled={isSaving}
-                className={`px-5 py-2.5 ${themeClasses.accentBg} ${themeClasses.accentText} font-medium hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2 rounded`}
-              >
-                {isSaving ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    Save Changes
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

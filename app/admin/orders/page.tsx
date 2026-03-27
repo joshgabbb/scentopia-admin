@@ -754,8 +754,6 @@ const executeExport = () => {
             <option value="all">All payment statuses</option>
             <option value="paid">Paid</option>
             <option value="pending">Pending</option>
-            <option value="failed">Failed</option>
-            <option value="refunded">Refunded</option>
           </select>
         </div>
        <div className="flex items-center justify-between mb-6">
@@ -1012,8 +1010,6 @@ const executeExport = () => {
                   <option value="all">All Payment Statuses</option>
                   <option value="paid">Paid</option>
                   <option value="pending">Pending</option>
-                  <option value="failed">Failed</option>
-                  <option value="refunded">Refunded</option>
                 </select>
               </div>
             </div>
