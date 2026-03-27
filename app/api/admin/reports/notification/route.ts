@@ -3,6 +3,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { logAuditAction } from "@/lib/audit-logger";
 
 const ITEMS_PER_PAGE = 20;
 
@@ -197,6 +198,14 @@ export async function POST(request: NextRequest) {
       throw error;
     }
 
+    logAuditAction({
+      action: "CREATE",
+      module: "NOTIFICATION",
+      entityId: data?.id ?? "",
+      entityLabel: title,
+      newValue: { title, type, targetAudience, scheduledAt: scheduledAt || null },
+    }, request);
+
     return NextResponse.json({
       success: true,
       data
@@ -205,8 +214,8 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Error creating notification:", error);
     return NextResponse.json(
-      { 
-        success: false, 
+      {
+        success: false,
         error: "Failed to create notification",
         details: error instanceof Error ? error.message : "Unknown error"
       },
@@ -371,6 +380,14 @@ export async function PATCH(request: NextRequest) {
         }, { status: 500 });
       }
 
+      logAuditAction({
+        action: "CREATE",
+        module: "NOTIFICATION",
+        entityId: id,
+        entityLabel: notif.title,
+        metadata: { sent: true, recipient_count: insertedCount, target_audience: notif.target_audience },
+      }, request);
+
       return NextResponse.json({
         success: true,
         data: { id, status: finalStatus, recipient_count: insertedCount },
@@ -459,6 +476,13 @@ export async function PATCH(request: NextRequest) {
           note: "Used fallback status"
         });
       }
+
+      logAuditAction({
+        action: "ARCHIVE",
+        module: "NOTIFICATION",
+        entityId: id,
+        metadata: { removed_from_mobile: removeFromMobile, removed_count: removedCount },
+      }, request);
 
       return NextResponse.json({
         success: true,
@@ -586,6 +610,14 @@ export async function PUT(request: NextRequest) {
       throw error;
     }
 
+    logAuditAction({
+      action: "UPDATE",
+      module: "NOTIFICATION",
+      entityId: id,
+      entityLabel: title,
+      newValue: { title, type, targetAudience, scheduledAt: scheduledAt || null },
+    }, request);
+
     return NextResponse.json({
       success: true,
       data
@@ -627,6 +659,12 @@ export async function DELETE(request: NextRequest) {
       console.error("Delete notification error:", error);
       throw error;
     }
+
+    logAuditAction({
+      action: "DELETE",
+      module: "NOTIFICATION",
+      entityId: id,
+    }, request);
 
     return NextResponse.json({
       success: true,

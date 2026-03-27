@@ -248,7 +248,7 @@ export default function HeatmapSection({ data: propData }: HeatmapSectionProps) 
               </span>
             )}
           </div>
-          <div className="h-[480px] overflow-hidden">
+          <div className={selectedRegion === 'all' ? 'min-h-[900px]' : 'h-[600px] overflow-hidden'}>
             <PhilippineMap
               key={selectedRegion}
               ref={mapRef}

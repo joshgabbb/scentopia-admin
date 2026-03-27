@@ -2,7 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { CategoryData } from "../route";
 // ✅ ADD THIS IMPORT
-import { logProductUpdate, logInventoryUpdate, logAuditAction } from "@/lib/audit-logger";
+import { logProductUpdate, logProductDelete, logInventoryUpdate } from "@/lib/audit-logger";
 
 export async function GET(
   request: NextRequest,
@@ -155,6 +155,21 @@ export async function PATCH(
 
     updateData.updated_at = new Date().toISOString();
 
+    // Auto-sync gender_tags when category changes so the mobile app filters correctly
+    if (updateData.category_id) {
+      const { data: cat } = await supabase
+        .from('category')
+        .select('name')
+        .eq('id', updateData.category_id)
+        .single();
+      if (cat?.name) {
+        const n = (cat.name as string).toLowerCase();
+        if (n.includes('women')) updateData.gender_tags = ['Women'];
+        else if (n.includes('men')) updateData.gender_tags = ['Men'];
+        else if (n.includes('unisex')) updateData.gender_tags = ['Unisex'];
+      }
+    }
+
     // When sizes change, prune stocks to remove keys for deleted sizes.
     // New sizes start at 0 stock — must come through stock-in.
     if (updateData.sizes !== undefined) {
@@ -236,8 +251,9 @@ export async function PATCH(
       if (otherFieldsChanged) {
         await logProductUpdate(
           productId,
-          oldProduct,
-          data,
+          oldProduct?.name ?? productId,
+          oldProduct ?? {},
+          updateData,
           request
         );
         console.log("✅ Product update logged for product:", productId);
@@ -371,14 +387,7 @@ export async function DELETE(
 
     // ✅ LOG PRODUCT DELETION (AFTER SUCCESSFUL DELETE)
     try {
-      await logAuditAction({
-        action: 'delete',
-        entityType: 'product',
-        entityId: productId,
-        changes: {
-          old: product
-        }
-      }, request);
+      await logProductDelete(productId, product?.name ?? productId, request);
       console.log("✅ Product deletion logged for product:", productId);
     } catch (logError) {
       // Don't fail the request if logging fails

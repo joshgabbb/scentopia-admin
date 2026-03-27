@@ -89,6 +89,7 @@ export default function SlowMovingPage() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const handleExport = (options: ExportOptions) => {
+    const exportFmt = (n: number) => `PHP ${n.toLocaleString()}`;
     const config: ExportConfig = {
       title:    "Slow-Moving Items Report",
       subtitle: `Products requiring attention — last ${days} days`,
@@ -96,21 +97,21 @@ export default function SlowMovingPage() {
       headers:  ["Product", "Price", "Units Sold", "Stock", "Stock Value", "Age (Days)", "Status", "Recommendation"],
       rows: products.map((p) => [
         p.productName,
-        formatCurrency(p.productPrice),
+        exportFmt(p.productPrice),
         p.unitsSold,
         p.currentStock,
-        formatCurrency(p.stockValue),
+        exportFmt(p.stockValue),
         p.productAgeDays,
         STATUS_LABELS[p.status] ?? p.status,
         p.recommendation,
       ]),
       additionalInfo: [
         { label: "Analysis Period",     value: `Last ${days} days` },
-        { label: "Classification Rule", value: `Very Slow = 1–${thresholds.verySlowMax} units | Slow = ${thresholds.verySlowMax + 1}–${thresholds.slowMax} units` },
+        { label: "Classification Rule", value: `Very Slow = 1-${thresholds.verySlowMax} units | Slow = ${thresholds.verySlowMax + 1}-${thresholds.slowMax} units` },
         { label: "No Sales Items",      value: summary.noSalesCount.toString() },
         { label: "Very Slow Items",     value: summary.verySlowCount.toString() },
         { label: "Slow Items",          value: summary.slowCount.toString() },
-        { label: "Stock Value at Risk", value: formatCurrency(summary.totalStockValue) },
+        { label: "Stock Value at Risk", value: exportFmt(summary.totalStockValue) },
       ],
     };
     exportReport(config, options.format);

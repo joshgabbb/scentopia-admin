@@ -120,6 +120,7 @@ export default function CombinedReportsSection() {
 
   const handleExport = (options: ExportOptions) => {
     if (!data) return;
+    const exportFmt = (n: number) => `PHP ${n.toLocaleString()}`;
     const dateRange =
       options.dateRange || (dateFrom && dateTo ? { from: dateFrom, to: dateTo } : undefined);
     const rows = getDataRows();
@@ -136,11 +137,11 @@ export default function CombinedReportsSection() {
           p.appQty || 0,
           p.storeQty || 0,
           p.quantitySold,
-          formatCurrency(p.revenue),
+          exportFmt(p.revenue),
         ]),
         dateRange,
         additionalInfo: [
-          { label: "Total Revenue", value: formatCurrency(data.summary.totalRevenue || 0) },
+          { label: "Total Revenue", value: exportFmt(data.summary.totalRevenue || 0) },
           { label: "Total Units Sold", value: String(data.summary.totalUnitsSold || 0) },
           { label: "Products", value: String(data.summary.productCount || 0) },
         ],
@@ -156,13 +157,13 @@ export default function CombinedReportsSection() {
           s.orderCount,
           s.appOrders || 0,
           s.storeOrders || 0,
-          formatCurrency(s.revenue),
-          formatCurrency(s.averageOrderValue),
+          exportFmt(s.revenue),
+          exportFmt(s.averageOrderValue),
           s.itemsSold,
         ]),
         dateRange,
         additionalInfo: [
-          { label: "Total Revenue", value: formatCurrency(data.summary.totalRevenue || 0) },
+          { label: "Total Revenue", value: exportFmt(data.summary.totalRevenue || 0) },
           { label: "Total Transactions", value: String(data.summary.totalOrders || 0) },
           { label: "App Orders", value: String(data.summary.appOrders || 0) },
           { label: "Store Transactions", value: String(data.summary.storeOrders || 0) },

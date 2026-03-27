@@ -1,7 +1,8 @@
 // app/admin/reports/partials/product-associations-section.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 
 interface ProductInfo {
   id: string;
@@ -31,6 +32,27 @@ interface BundleRecommendation {
   suggestedDiscount: number;
   bundlePrice: number;
   reasoning: string;
+}
+
+
+interface BundleSaleRow {
+  id: string;
+  name: string;
+  bundlePrice: number;
+  originalPrice: number;
+  discountPercentage: number;
+  isActive: boolean;
+  publishedAt: string;
+  product1: { id: string; name: string; price: number; images: string[] | null } | null;
+  product2: { id: string; name: string; price: number; images: string[] | null } | null;
+  timesSold: number;
+  totalRevenue: number;
+  avgRevenue: number;
+}
+
+interface BundleSalesData {
+  bundleSales: BundleSaleRow[];
+  summary: { totalBundlesTracked: number; totalBundleOrders: number; totalRevenue: number };
 }
 
 interface AssociationsData {
@@ -126,13 +148,16 @@ function ProductThumb({
 }
 
 export default function ProductAssociationsSection() {
+  const router = useRouter();
   const [data, setData] = useState<AssociationsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [days, setDays] = useState(90);
-  const [activeTab, setActiveTab] = useState<
-    "patterns" | "bundles" | "products"
-  >("patterns");
+  const [activeTab, setActiveTab] = useState<"patterns" | "bundles" | "products" | "bundle-sales">("patterns");
+
+  // Bundle sales state
+  const [bundleSalesData, setBundleSalesData] = useState<BundleSalesData | null>(null);
+  const [bundleSalesLoading, setBundleSalesLoading] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -156,6 +181,26 @@ export default function ProductAssociationsSection() {
   useEffect(() => {
     fetchData();
   }, [days]);
+
+  // Keep a ref so the realtime callback always calls the latest fetchData
+  const fetchDataRef = useRef(fetchData);
+  fetchDataRef.current = fetchData;
+
+  const fetchBundleSales = async () => {
+    setBundleSalesLoading(true);
+    try {
+      const res = await fetch(`/api/admin/analytics/bundle-sales?days=${days}`);
+      const result = await res.json();
+      if (result.success) setBundleSalesData(result.data);
+    } finally {
+      setBundleSalesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "bundle-sales") fetchBundleSales();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, days]);
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("en-PH", {
@@ -208,6 +253,7 @@ export default function ProductAssociationsSection() {
     { key: "patterns" as const, label: "Buying Patterns" },
     { key: "bundles" as const, label: "Bundle Ideas" },
     { key: "products" as const, label: "Products" },
+    { key: "bundle-sales" as const, label: "Bundle Sales" },
   ];
 
   return (
@@ -298,13 +344,18 @@ export default function ProductAssociationsSection() {
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`px-5 py-3 text-sm font-medium transition-colors ${
+            className={`px-5 py-3 text-sm font-medium transition-colors flex items-center gap-2 ${
               activeTab === tab.key
                 ? "text-[#d4af37] border-b-2 border-[#d4af37]"
                 : "text-[#7a6a4a] dark:text-[#9a8a68] hover:text-[#1c1810] dark:hover:text-[#f0e8d8]"
             }`}
           >
             {tab.label}
+            {"count" in tab && tab.count > 0 && (
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold bg-[#d4af37] text-[#0a0a0a]">
+                {tab.count}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -556,6 +607,19 @@ export default function ProductAssociationsSection() {
                         {bundle.reasoning}
                       </p>
                     </div>
+
+                    {/* ── Take Action ── */}
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        onClick={() => router.push("/admin/products/bundles")}
+                        className="inline-flex items-center gap-2 px-4 py-1.5 bg-[#1c1810] hover:bg-[#2e2820] text-white text-xs font-bold rounded transition-colors"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                        </svg>
+                        Take Action
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -664,6 +728,148 @@ export default function ProductAssociationsSection() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── TAB 4: Bundle Sales ─────────────────────────────────────────── */}
+      {activeTab === "bundle-sales" && (
+        <div className="space-y-4">
+          {bundleSalesLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600" />
+            </div>
+          ) : !bundleSalesData ? (
+            <div className="bg-white dark:bg-[#26231a] border border-[#e8e0d0] dark:border-[#2e2a1e] px-4 py-10 text-center">
+              <p className="text-sm text-[#7a6a4a] dark:text-[#9a8a68]">Failed to load bundle sales data.</p>
+            </div>
+          ) : (
+            <>
+              {/* Summary stat cards */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-white dark:bg-[#26231a] border border-[#e8e0d0] dark:border-[#2e2a1e] p-4">
+                  <p className="text-xs text-[#7a6a4a] dark:text-[#9a8a68] uppercase tracking-wide mb-1">
+                    Bundles Tracked
+                  </p>
+                  <p className="text-2xl font-bold text-[#1c1810] dark:text-[#f0e8d8]">
+                    {bundleSalesData.summary.totalBundlesTracked}
+                  </p>
+                </div>
+                <div className="bg-white dark:bg-[#26231a] border border-[#e8e0d0] dark:border-[#2e2a1e] p-4">
+                  <p className="text-xs text-[#7a6a4a] dark:text-[#9a8a68] uppercase tracking-wide mb-1">
+                    Bundle Orders
+                  </p>
+                  <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                    {bundleSalesData.summary.totalBundleOrders}
+                  </p>
+                </div>
+                <div className="bg-white dark:bg-[#26231a] border border-[#e8e0d0] dark:border-[#2e2a1e] p-4">
+                  <p className="text-xs text-[#7a6a4a] dark:text-[#9a8a68] uppercase tracking-wide mb-1">
+                    Total Revenue
+                  </p>
+                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    {formatCurrency(bundleSalesData.summary.totalRevenue)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Bundle sales list */}
+              <div className="bg-white dark:bg-[#26231a] border border-[#e8e0d0] dark:border-[#2e2a1e]">
+                <div className="px-4 py-3 border-b border-[#e8e0d0] dark:border-[#2e2a1e]">
+                  <h3 className="font-semibold text-[#1c1810] dark:text-[#f0e8d8]">Best-Selling Bundle Deals</h3>
+                  <p className="text-xs text-[#7a6a4a] dark:text-[#9a8a68] mt-0.5">
+                    Orders where both bundle products were purchased together · last {days} days
+                  </p>
+                </div>
+
+                {bundleSalesData.bundleSales.length === 0 ? (
+                  <div className="px-4 py-10 text-center">
+                    <p className="text-sm text-[#7a6a4a] dark:text-[#9a8a68]">
+                      No bundle sales recorded in this period.
+                    </p>
+                    <p className="text-xs text-[#7a6a4a] dark:text-[#9a8a68] mt-1">
+                      Make sure bundles are published and customers have placed orders containing both products.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-[#e8e0d0] dark:divide-[#2e2a1e]">
+                    {bundleSalesData.bundleSales.map((bundle, index) => {
+                      const p1Img = Array.isArray(bundle.product1?.images)
+                        ? bundle.product1.images[0]
+                        : null;
+                      const p2Img = Array.isArray(bundle.product2?.images)
+                        ? bundle.product2.images[0]
+                        : null;
+
+                      return (
+                        <div key={bundle.id} className="px-4 py-4 flex items-start gap-4">
+                          {/* Rank */}
+                          <span className="text-sm font-bold text-[#b8a070] w-5 text-center mt-1 flex-shrink-0">
+                            {index + 1}
+                          </span>
+
+                          {/* Product pair thumbnails */}
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <div className="w-10 h-10 rounded overflow-hidden bg-[#f5f0e8] dark:bg-[#1e1b14] border border-[#e8e0d0] dark:border-[#2e2a1e]">
+                              {p1Img ? (
+                                <img src={p1Img} alt={bundle.product1?.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-[#b8a070] text-xs">?</div>
+                              )}
+                            </div>
+                            <span className="text-[#b8a070] text-xs">+</span>
+                            <div className="w-10 h-10 rounded overflow-hidden bg-[#f5f0e8] dark:bg-[#1e1b14] border border-[#e8e0d0] dark:border-[#2e2a1e]">
+                              {p2Img ? (
+                                <img src={p2Img} alt={bundle.product2?.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-[#b8a070] text-xs">?</div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Bundle info */}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-[#1c1810] dark:text-[#f0e8d8] truncate">
+                              {bundle.name}
+                            </p>
+                            <p className="text-xs text-[#7a6a4a] dark:text-[#9a8a68] truncate mt-0.5">
+                              {bundle.product1?.name} · {bundle.product2?.name}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span
+                                className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
+                                  bundle.isActive
+                                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                    : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+                                }`}
+                              >
+                                {bundle.isActive ? "Active" : "Inactive"}
+                              </span>
+                              <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                                {bundle.discountPercentage}% off
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Stats */}
+                          <div className="text-right flex-shrink-0 space-y-0.5">
+                            <p className="text-sm font-bold text-[#1c1810] dark:text-[#f0e8d8]">
+                              {bundle.timesSold}×&nbsp;sold
+                            </p>
+                            <p className="text-xs text-green-600 dark:text-green-400 font-medium">
+                              {formatCurrency(bundle.totalRevenue)}
+                            </p>
+                            <p className="text-xs text-[#7a6a4a] dark:text-[#9a8a68]">
+                              avg {formatCurrency(bundle.avgRevenue)}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

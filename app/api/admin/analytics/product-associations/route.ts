@@ -214,7 +214,23 @@ export async function GET(request: NextRequest) {
 
     console.log(`🔗 Found ${associationRules.length} association rules`);
 
-    // Identify top sellers and slow movers
+    // Fetch active, non-archived product IDs to filter out inactive/archived from suggestions
+    const { data: activeProducts } = await supabase
+      .from("products")
+      .select("id, name, price, images")
+      .eq("is_active", true)
+      .eq("is_archived", false);
+
+    const activeProductIds = new Set((activeProducts || []).map((p: any) => p.id));
+
+    // Filter productStats to only include active, non-archived products
+    for (const id of Array.from(productStats.keys())) {
+      if (!activeProductIds.has(id)) {
+        productStats.delete(id);
+      }
+    }
+
+    // Identify top sellers and slow movers (only active, non-archived)
     const allProducts = Array.from(productStats.values());
     allProducts.sort((a, b) => b.totalSold - a.totalSold);
 
@@ -224,17 +240,18 @@ export async function GET(request: NextRequest) {
       .filter((p) => p.totalSold > 0)
       .slice(0, 10);
 
-    // Add products with zero sales from database
+    // Add active, non-archived products with zero sales from database
     const { data: zeroSalesProducts, error: zeroSalesError } = await supabase
       .from("products")
-      .select("id, name, price, images, is_active")
-      .eq("is_active", true);
+      .select("id, name, price, images")
+      .eq("is_active", true)
+      .eq("is_archived", false);
 
     if (!zeroSalesError && zeroSalesProducts) {
       const soldProductIds = new Set(allProducts.map((p) => p.id));
       const noSalesProducts = zeroSalesProducts
-        .filter((p) => !soldProductIds.has(p.id))
-        .map((p) => ({
+        .filter((p: any) => !soldProductIds.has(p.id))
+        .map((p: any) => ({
           id: p.id,
           name: p.name,
           price: Number(p.price) || 0,

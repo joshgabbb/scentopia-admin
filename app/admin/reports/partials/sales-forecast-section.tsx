@@ -30,16 +30,9 @@ interface ForecastResult {
   }>;
 }
 
-const FORECAST_OPTIONS = [
-  { value: '1_month', label: 'Next Month' },
-  { value: '3_months', label: 'Next 3 Months' },
-  { value: '6_months', label: 'Next 6 Months' },
-  { value: '1_year', label: 'Next Year' }
-];
-
 export default function SalesForecastingSection() {
   const { themeClasses, isDark } = useTheme();
-  const [selectedPeriod, setSelectedPeriod] = useState('3_months');
+  const [selectedPeriod, setSelectedPeriod] = useState('1_month');
   const [forecastData, setForecastData] = useState<ForecastResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -162,7 +155,7 @@ export default function SalesForecastingSection() {
           <div>
             <span className="font-semibold text-[#8B6914] dark:text-[#D4AF37] uppercase tracking-wide">Data Source</span>
             <span className="ml-2 text-[#1c1810] dark:text-[#f0e8d8]">
-              <code className="bg-[#f2ede4] dark:bg-[#26231a] px-1 rounded">orders</code> table — last 12 months of order history
+              <code className="bg-[#f2ede4] dark:bg-[#26231a] px-1 rounded">orders</code> table — past 6 months of order history
             </span>
           </div>
           <div>
@@ -183,19 +176,6 @@ export default function SalesForecastingSection() {
         </h2>
 
         <div className="flex items-center gap-3">
-          <select
-            value={selectedPeriod}
-            onChange={(e) => setSelectedPeriod(e.target.value)}
-            className="px-4 py-2 bg-white dark:bg-[#26231a] border border-[#e8e0d0] dark:border-[#2e2a1e] text-[#1c1810] dark:text-[#f0e8d8] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
-            disabled={loading}
-          >
-            {FORECAST_OPTIONS.map(option => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-
           <button
             onClick={() => fetchForecastData(selectedPeriod)}
             disabled={loading}

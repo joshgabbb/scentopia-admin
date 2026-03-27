@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { logAuditAction } from "@/lib/audit-logger";
 
 // Tag types that correspond to product tag fields
 export type TagType = 'occasion' | 'weather' | 'top_notes' | 'other';
@@ -124,6 +125,8 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
 
+    logAuditAction({ action: "CREATE", module: "TAG", entityId: tag.id, entityLabel: tag.name, newValue: { name: tag.name, type: tag.type } }, request);
+
     return NextResponse.json({
       success: true,
       data: tag,
@@ -227,6 +230,8 @@ export async function PUT(request: NextRequest) {
       }, { status: 404 });
     }
 
+    logAuditAction({ action: "UPDATE", module: "TAG", entityId: id, entityLabel: tag.name, newValue: updateData }, request);
+
     return NextResponse.json({
       success: true,
       data: tag,
@@ -306,6 +311,8 @@ export async function DELETE(request: NextRequest) {
 
       if (error) throw error;
 
+      logAuditAction({ action: "UPDATE", module: "TAG", entityId: id, entityLabel: tag.name, metadata: { reason: "deactivated (tag is in use by products)" } }, request);
+
       return NextResponse.json({
         success: true,
         data: updatedTag,
@@ -320,6 +327,8 @@ export async function DELETE(request: NextRequest) {
       .eq('id', id);
 
     if (error) throw error;
+
+    logAuditAction({ action: "DELETE", module: "TAG", entityId: id, entityLabel: tag.name, oldValue: { name: tag.name, type: tag.type } }, request);
 
     return NextResponse.json({
       success: true,

@@ -1,12 +1,12 @@
 // app/api/admin/users/[id]/route.ts
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   try {
     const { id: userId } = await params;
@@ -20,16 +20,10 @@ export async function GET(
 
     console.log('👤 Fetching user details:', userId);
 
-    // Get user profile - only select columns that exist
+    // Get user profile
     const { data: user, error: userError } = await supabase
       .from('profiles')
-      .select(`
-        id,
-        first_name,
-        last_name,
-        email,
-        phone
-      `)
+      .select('*')
       .eq('id', userId)
       .single();
 
@@ -77,6 +71,7 @@ export async function GET(
 
     if (ordersError) {
       console.error('❌ Orders fetch error:', ordersError);
+      throw ordersError;
     }
 
     // Calculate statistics
@@ -128,14 +123,15 @@ export async function GET(
           lastName: user.last_name || '',
           email: user.email || '',
           phone: user.phone || '',
-          isActive: true,
-          createdAt: null,
-          updatedAt: null
+          status: user.status || 'active',
+          createdAt: user.created_at || null,
+          updatedAt: user.updated_at || null
         },
         stats: {
           orderCount,
           totalSpent,
           averageOrderValue,
+          cancelledOrderCount: statusBreakdown['Cancelled'] || 0,
           statusBreakdown
         },
         orders: formattedOrders

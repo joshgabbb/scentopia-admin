@@ -64,11 +64,11 @@ export async function GET(
       .single();
 
     // Try to get courier columns separately (they may not exist yet)
-    let courierInfo = { waybill_number: null, courier_code: null, shipping_fee: null, estimated_delivery: null };
+    let courierInfo: { waybill_number: string | null; courier_code: string | null; shipping_fee: number | null; estimated_delivery: string | null; courier_provider: string | null } = { waybill_number: null, courier_code: null, shipping_fee: null, estimated_delivery: null, courier_provider: null };
     try {
       const { data: courierData } = await supabase
         .from('orders')
-        .select('waybill_number, courier_code, shipping_fee, estimated_delivery')
+        .select('waybill_number, courier_code, shipping_fee, estimated_delivery, courier_provider')
         .eq('id', orderId)
         .single();
       if (courierData) {
@@ -151,6 +151,11 @@ export async function GET(
         courier_name?: string;
         shipping_fee?: number;
         estimated_delivery?: string;
+        // Lalamove-specific
+        lalamove_order_id?: string;
+        tracking_url?: string;
+        delivery_amount?: string;
+        shipped_at?: string;
       };
     } | null;
 
@@ -209,10 +214,13 @@ export async function GET(
       itemCount,
       note: order.note,
       // Courier/shipping info
-      trackingNumber: courierInfo.waybill_number || null,
+      courierProvider: courierInfo.courier_provider || deliveryLocation?.courier_info?.courier_code?.toLowerCase() || 'jnt',
+      trackingNumber: courierInfo.waybill_number || deliveryLocation?.courier_info?.lalamove_order_id || null,
       waybillNumber: courierInfo.waybill_number || null,
-      courier: courierInfo.courier_code || null,
-      courierCode: courierInfo.courier_code || null,
+      courier: courierInfo.courier_code || deliveryLocation?.courier_info?.courier_name || null,
+      courierCode: courierInfo.courier_code || deliveryLocation?.courier_info?.courier_code || null,
+      trackingUrl: deliveryLocation?.courier_info?.tracking_url
+        || (courierInfo.waybill_number ? `https://www.jtexpress.ph/index/query/gzquery.html?waybillnumber=${courierInfo.waybill_number}` : null),
       // Prefer delivery_location.shipping_fee (set at checkout by mobile) over post-shipment column
       shippingFee: deliveryLocation?.shipping_fee
         ? Number(deliveryLocation.shipping_fee)

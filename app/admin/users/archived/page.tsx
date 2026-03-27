@@ -13,7 +13,6 @@ import {
   Phone,
   Calendar,
   ShoppingBag,
-  DollarSign,
   ArrowLeft,
   Loader2,
   AlertCircle,
@@ -118,12 +117,7 @@ export default function ArchivedUsersPage() {
     });
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD"
-    }).format(amount);
-  };
+  const formatCurrency = (amount: number) => `PHP ${amount.toLocaleString()}`;
 
   return (
     <div className="space-y-6">
@@ -272,7 +266,6 @@ export default function ArchivedUsersPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <DollarSign className="w-4 h-4 text-[#d4af37]" />
                           <span className="text-[#1c1810]">{formatCurrency(user.totalSpent)}</span>
                         </div>
                       </td>

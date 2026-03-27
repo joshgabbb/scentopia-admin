@@ -3,6 +3,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { logExport } from "@/lib/audit-logger";
 
 export async function GET(request: NextRequest) {
   try {
@@ -81,6 +82,8 @@ export async function GET(request: NextRequest) {
     ]);
 
     const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+
+    logExport("INVENTORY", "csv", rows.length, request);
 
     return new NextResponse(csv, {
       status: 200,

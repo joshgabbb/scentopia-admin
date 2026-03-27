@@ -1,6 +1,7 @@
 // app/api/admin/users/route.ts
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { logAuditAction } from "@/lib/audit-logger";
 
 // User status types
 type UserStatus = 'active' | 'inactive' | 'suspended' | 'deactivated';
@@ -41,6 +42,24 @@ export async function GET(request: NextRequest) {
       query = query.eq('status', statusFilter);
     }
 
+    // Apply server-side ordering before pagination
+    switch (sortBy) {
+      case 'name':
+      case 'first_name':
+        query = query.order('first_name', { ascending: sortOrder === 'asc' });
+        break;
+      case 'email':
+        query = query.order('email', { ascending: sortOrder === 'asc' });
+        break;
+      case 'last_login':
+        query = query.order('last_login', { ascending: sortOrder === 'asc', nullsFirst: false });
+        break;
+      case 'created_at':
+      default:
+        query = query.order('created_at', { ascending: sortOrder === 'asc' });
+        break;
+    }
+
     // Apply pagination
     query = query.range(offset, offset + limit - 1);
 
@@ -57,21 +76,24 @@ export async function GET(request: NextRequest) {
 
     // Get order statistics for each user
     const userIds = users?.map(u => u.id) || [];
-    let orderStats: Record<string, { orderCount: number; totalSpent: number; lastOrderDate: string | null }> = {};
+    let orderStats: Record<string, { orderCount: number; totalSpent: number; lastOrderDate: string | null; cancelledOrderCount: number }> = {};
 
     if (userIds.length > 0) {
       const { data: ordersData } = await supabase
         .from('orders')
-        .select('user_id, amount, created_at')
+        .select('user_id, amount, created_at, order_status')
         .in('user_id', userIds);
 
       if (ordersData) {
         ordersData.forEach(order => {
           if (!orderStats[order.user_id]) {
-            orderStats[order.user_id] = { orderCount: 0, totalSpent: 0, lastOrderDate: null };
+            orderStats[order.user_id] = { orderCount: 0, totalSpent: 0, lastOrderDate: null, cancelledOrderCount: 0 };
           }
           orderStats[order.user_id].orderCount += 1;
           orderStats[order.user_id].totalSpent += Number(order.amount) || 0;
+          if (order.order_status === 'Cancelled') {
+            orderStats[order.user_id].cancelledOrderCount += 1;
+          }
           if (!orderStats[order.user_id].lastOrderDate ||
               new Date(order.created_at) > new Date(orderStats[order.user_id].lastOrderDate!)) {
             orderStats[order.user_id].lastOrderDate = order.created_at;
@@ -95,7 +117,8 @@ export async function GET(request: NextRequest) {
       lastLogin: user.last_login || null,
       orderCount: orderStats[user.id]?.orderCount || 0,
       totalSpent: orderStats[user.id]?.totalSpent || 0,
-      lastOrderDate: orderStats[user.id]?.lastOrderDate || null
+      lastOrderDate: orderStats[user.id]?.lastOrderDate || null,
+      cancelledOrderCount: orderStats[user.id]?.cancelledOrderCount || 0
     })) || [];
 
     // Apply search filter (client-side for flexibility)
@@ -164,7 +187,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   try {
     const body = await request.json();
@@ -207,6 +230,15 @@ export async function PUT(request: NextRequest) {
 
     console.log('✅ User updated successfully');
 
+    const userEmail = updatedUser.email ?? id;
+    if (status === 'suspended') {
+      logAuditAction({ action: "SUSPEND", module: "USER", entityId: id, entityLabel: userEmail, metadata: { status: 'suspended' } }, request);
+    } else if (status === 'active') {
+      logAuditAction({ action: "RESTORE", module: "USER", entityId: id, entityLabel: userEmail, metadata: { status: 'active' } }, request);
+    } else if (Object.keys(updateData).length > 0) {
+      logAuditAction({ action: "UPDATE", module: "USER", entityId: id, entityLabel: userEmail, newValue: updateData }, request);
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -230,7 +262,7 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   try {
     const { searchParams } = new URL(request.url);
@@ -259,6 +291,8 @@ export async function DELETE(request: NextRequest) {
 
       if (error) throw error;
 
+      logAuditAction({ action: "RESTORE", module: "USER", entityId: userId, metadata: { action: "restored from archive" } }, request);
+
       return NextResponse.json({
         success: true,
         message: 'User restored successfully'
@@ -280,6 +314,8 @@ export async function DELETE(request: NextRequest) {
     if (error) throw error;
 
     console.log('✅ User archived successfully');
+
+    logAuditAction({ action: "ARCHIVE", module: "USER", entityId: userId, metadata: { action: "archived" } }, request);
 
     return NextResponse.json({
       success: true,

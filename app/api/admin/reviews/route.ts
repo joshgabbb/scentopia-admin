@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { logAuditAction } from "@/lib/audit-logger";
 
 const ITEMS_PER_PAGE = 20;
 
@@ -106,6 +107,14 @@ export async function PATCH(request: NextRequest) {
       .single();
 
     if (error) throw error;
+
+    logAuditAction({
+      action: "UPDATE",
+      module: "FEEDBACK",
+      entityId: id,
+      entityLabel: `Review #${id.substring(0, 8).toUpperCase()}`,
+      newValue: { admin_response: adminResponse.trim() },
+    }, request);
 
     return NextResponse.json({ success: true, data });
 

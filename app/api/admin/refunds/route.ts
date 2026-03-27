@@ -1,6 +1,7 @@
 // app/api/admin/refunds/route.ts
 import { createAdminClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { logAuditAction } from "@/lib/audit-logger";
 
 // GET /api/admin/refunds?status=Pending&order_id=xxx
 export async function GET(request: NextRequest) {
@@ -218,6 +219,15 @@ export async function PATCH(request: NextRequest) {
     } catch (notifyErr) {
       console.error("Refund notification error (non-critical):", notifyErr);
     }
+
+    logAuditAction({
+      action: action === "approve" ? "APPROVE" : "DECLINE",
+      module: "REFUND",
+      entityId: refundId,
+      entityLabel: `Refund for Order #${String(refund.order_id).substring(0, 8).toUpperCase()}`,
+      newValue: { status: newStatus, amount: refund.amount },
+      metadata: { admin_note: adminNote ?? null, order_id: refund.order_id },
+    }, request);
 
     return NextResponse.json({ success: true, status: newStatus });
   } catch (error) {

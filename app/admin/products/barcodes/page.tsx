@@ -146,7 +146,8 @@ export default function BarcodesPage() {
 
   useEffect(() => {
     fetchBarcodes(1);
-  }, [fetchBarcodes]);
+    fetchScans(1);
+  }, [fetchBarcodes, fetchScans]);
 
   useEffect(() => {
     if (tab === "history") fetchScans(1, scanFilter);

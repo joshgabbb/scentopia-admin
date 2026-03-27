@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { logAuditAction } from "@/lib/audit-logger";
 
 /** GET /api/admin/barcodes
  * Query params:
@@ -97,6 +98,9 @@ export async function POST(request: NextRequest) {
 
     if (response.error) throw response.error;
 
+    const barcode = response.data as any;
+    logAuditAction({ action: "CREATE", module: "BARCODE", entityId: barcode?.id ?? product_id, entityLabel: `${barcode?.products?.name ?? product_id} (${size})`, newValue: { product_id, size, barcode_value: barcode?.barcode_value } }, request);
+
     return NextResponse.json({
       success: true,
       data: response.data,
@@ -137,6 +141,8 @@ export async function DELETE(request: NextRequest) {
       .eq("id", id);
 
     if (error) throw error;
+
+    logAuditAction({ action: "DELETE", module: "BARCODE", entityId: id, metadata: { barcode_id: id } }, request);
 
     return NextResponse.json({ success: true });
   } catch (error) {

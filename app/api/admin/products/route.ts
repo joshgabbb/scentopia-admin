@@ -8,8 +8,8 @@ export interface CategoryData {
 }
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient();
-  
+  const supabase = createAdminClient();
+
   try {
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
@@ -150,12 +150,16 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Products API error:', error);
+    const details =
+      error instanceof Error
+        ? error.message
+        : typeof error === 'object' && error !== null
+        ? ((error as Record<string, unknown>).message as string) ||
+          ((error as Record<string, unknown>).details as string) ||
+          JSON.stringify(error)
+        : String(error);
     return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to fetch products',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
+      { success: false, error: 'Failed to fetch products', details },
       { status: 500 }
     );
   }
@@ -184,6 +188,18 @@ export async function POST(request: NextRequest) {
       stocks
     } = body;
 
+    // Derive gender_tags from the category name so the mobile app filters correctly
+    let genderTags: string[] = [];
+    if (categoryId) {
+      const { data: cat } = await supabase.from('category').select('name').eq('id', categoryId).single();
+      if (cat?.name) {
+        const n = (cat.name as string).toLowerCase();
+        if (n.includes('women')) genderTags = ['Women'];
+        else if (n.includes('men')) genderTags = ['Men'];
+        else if (n.includes('unisex')) genderTags = ['Unisex'];
+      }
+    }
+
     const { data, error } = await supabase
       .from('products')
       .insert({
@@ -194,6 +210,7 @@ export async function POST(request: NextRequest) {
         category_id: categoryId,
         perfume_type: perfumeType,
         is_active: isActive,
+        gender_tags: genderTags,
         occasions_tags: occasionsTags,
         weather_tags: weatherTags,
         top_notes_tags: topNotesTags,

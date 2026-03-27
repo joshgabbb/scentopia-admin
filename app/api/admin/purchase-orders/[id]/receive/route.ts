@@ -72,11 +72,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       .eq("id", id);
 
     await logAuditAction({
-      action: "UPDATE",
-      module: "INVENTORY",
+      action: "PO_RECEIVED",
+      module: "PURCHASE_ORDER",
       entityId: id,
       entityLabel: (po as any).po_number,
-      metadata: { action: "received", items_count: (items ?? []).length },
+      metadata: { items_count: (items ?? []).length },
     }, request);
 
     return NextResponse.json({

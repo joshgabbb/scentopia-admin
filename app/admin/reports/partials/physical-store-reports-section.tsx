@@ -168,6 +168,7 @@ export default function PhysicalStoreReportsSection() {
 
   const handleExport = (options: ExportOptions) => {
     if (!data) return;
+    const exportFmt = (n: number) => `PHP ${n.toLocaleString()}`;
     const dateRange =
       options.dateRange || (dateFrom && dateTo ? { from: dateFrom, to: dateTo } : undefined);
     const rows = getDataRows();
@@ -179,10 +180,10 @@ export default function PhysicalStoreReportsSection() {
         subtitle: "Top products sold in-store",
         filename: "physical_store_by_product",
         headers: ["Product", "Units Sold", "Revenue"],
-        rows: rows.map((p: any) => [p.name, p.quantitySold, formatCurrency(p.revenue)]),
+        rows: rows.map((p: any) => [p.name, p.quantitySold, exportFmt(p.revenue)]),
         dateRange,
         additionalInfo: [
-          { label: "Total Revenue", value: formatCurrency(data.summary.totalRevenue || 0) },
+          { label: "Total Revenue", value: exportFmt(data.summary.totalRevenue || 0) },
           { label: "Total Units Sold", value: String(data.summary.totalUnitsSold || 0) },
           { label: "Products", value: String(data.summary.productCount || 0) },
         ],
@@ -196,15 +197,15 @@ export default function PhysicalStoreReportsSection() {
         rows: rows.map((s: any) => [
           s.period,
           s.orderCount,
-          formatCurrency(s.revenue),
-          formatCurrency(s.averageOrderValue),
+          exportFmt(s.revenue),
+          exportFmt(s.averageOrderValue),
           s.itemsSold,
         ]),
         dateRange,
         additionalInfo: [
-          { label: "Total Revenue", value: formatCurrency(data.summary.totalRevenue || 0) },
+          { label: "Total Revenue", value: exportFmt(data.summary.totalRevenue || 0) },
           { label: "Total Transactions", value: String(data.summary.totalOrders || 0) },
-          { label: "Avg Transaction", value: formatCurrency(data.summary.averageOrderValue || 0) },
+          { label: "Avg Transaction", value: exportFmt(data.summary.averageOrderValue || 0) },
         ],
       };
     }

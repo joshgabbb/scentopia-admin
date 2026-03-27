@@ -10,7 +10,7 @@ export async function PATCH(
 
   try {
     const { id: orderId } = await context.params;
-    const { status, title, body } = await request.json();
+    const { status, title, body, tracking_url } = await request.json();
 
     // Block Processing/To Ship/Shipped if order is not paid
     if (status === 'Processing' || status === 'To Ship' || status === 'Shipped') {
@@ -109,12 +109,12 @@ export async function PATCH(
           'To Ship': {
             type: 'pending_order',
             title: '📦 Your Order is Packed!',
-            body: "Your order is packed and ready to be handed to J&T Express. We'll notify you once it's on its way.",
+            body: "Your order is packed and ready to ship. We'll notify you once it's on its way.",
           },
           Shipped: {
             type: 'pending_order',
             title: '🚚 Your Order is On Its Way!',
-            body: 'Your order has been handed to J&T Express and is now on its way. Track your delivery for updates.',
+            body: 'Your order is on its way. Track your delivery for updates.',
           },
           Delivered: {
             type: 'successful_order',
@@ -138,13 +138,16 @@ export async function PATCH(
           await supabase.from('notifications').insert({
             user_id: order.user_id,
             notification_type: notif.type,
-            title: notif.title,
-            body: notif.body,
+            // Use custom title/body from caller (e.g. Lalamove sidebar) if provided
+            title: title || notif.title,
+            body: body || notif.body,
             is_read: false,
             send_push_notification: true,
             metadata: {
               action: 'order-redirect',
               order_id: orderId,
+              // Include tracking URL so mobile can show a "Track Order" button
+              ...(tracking_url ? { tracking_url } : {}),
             },
           });
         }

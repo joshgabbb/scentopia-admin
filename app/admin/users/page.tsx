@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Search,
   Edit2,
-  Archive,
+
   Users,
   X,
   Check,
@@ -29,6 +29,8 @@ import {
   Filter,
 } from "lucide-react";
 
+const CANCELLATION_THRESHOLD = 5;
+
 interface User {
   id: string;
   firstName: string;
@@ -36,14 +38,14 @@ interface User {
   email: string;
   phone: string;
   status: 'active' | 'inactive' | 'suspended' | 'deactivated';
-  isArchived: boolean;
-  archivedAt: string | null;
+
   createdAt: string | null;
   updatedAt: string | null;
   lastLogin: string | null;
   orderCount: number;
   totalSpent: number;
   lastOrderDate: string | null;
+  cancelledOrderCount: number;
 }
 
 interface UserDetails {
@@ -52,6 +54,7 @@ interface UserDetails {
     orderCount: number;
     totalSpent: number;
     averageOrderValue: number;
+    cancelledOrderCount: number;
     statusBreakdown: Record<string, number>;
   };
   orders: {
@@ -156,7 +159,6 @@ export default function UsersPage() {
   // Modal states
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [userDetails, setUserDetails] = useState<UserDetails | null>(null);
@@ -342,36 +344,11 @@ export default function UsersPage() {
     }
   };
 
-  const handleArchiveUser = async () => {
-    if (!selectedUser) return;
-
-    setIsSubmitting(true);
-    setFormError(null);
-
-    try {
-      const response = await fetch(`/api/admin/users?id=${selectedUser.id}&action=archive`, {
-        method: "DELETE",
-      });
-
-      const result = await response.json();
-
-      if (!result.success) {
-        throw new Error(result.error || "Failed to archive user");
-      }
-
-      setIsArchiveModalOpen(false);
-      setSelectedUser(null);
-      fetchUsers();
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Failed to archive user");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const openViewModal = (user: User) => {
     setSelectedUser(user);
     setUserDetails(null);
+    setFormError(null);
     setIsViewModalOpen(true);
     fetchUserDetails(user.id);
   };
@@ -386,12 +363,6 @@ export default function UsersPage() {
     setActionMenuOpen(null);
   };
 
-  const openArchiveModal = (user: User) => {
-    setSelectedUser(user);
-    setFormError(null);
-    setIsArchiveModalOpen(true);
-    setActionMenuOpen(null);
-  };
 
   const openStatusModal = (user: User, status: string) => {
     setSelectedUser(user);
@@ -507,12 +478,11 @@ export default function UsersPage() {
               value={sortBy}
               onChange={(e) => {
                 setSortBy(e.target.value);
-                setSortOrder('desc');
+                setSortOrder(e.target.value === 'name' ? 'asc' : 'desc');
               }}
               className="px-3 py-2 border border-[#e8e0d0] bg-[#faf8f3] text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37] text-sm"
             >
               <option value="created_at">Sort by: Date Created</option>
-              <option value="last_login">Sort by: Last Login</option>
               <option value="name">Sort by: Name</option>
               <option value="email">Sort by: Email</option>
             </select>
@@ -554,6 +524,9 @@ export default function UsersPage() {
                     Orders
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-[#7a6a4a] uppercase tracking-wider">
+                    Cancelled
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#7a6a4a] uppercase tracking-wider">
                     Total Spent
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-[#7a6a4a] uppercase tracking-wider">
@@ -581,7 +554,7 @@ export default function UsersPage() {
                 ) : users.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="px-6 py-12 text-center text-[#7a6a4a]"
                     >
                       <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
@@ -625,6 +598,16 @@ export default function UsersPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
+                        {user.cancelledOrderCount >= CANCELLATION_THRESHOLD ? (
+                          <span className="inline-flex items-center gap-1 text-sm font-semibold text-red-400">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            {user.cancelledOrderCount}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-[#7a6a4a]">{user.cancelledOrderCount || 0}</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
                         <span className="text-sm font-medium text-[#d4af37]">
                           {formatCurrency(user.totalSpent)}
                         </span>
@@ -647,14 +630,6 @@ export default function UsersPage() {
                           >
                             <Eye className="w-4 h-4" />
                           </button>
-                          <button
-                            onClick={() => openEditModal(user)}
-                            className="p-1.5 text-[#7a6a4a] hover:text-[#d4af37] hover:bg-[#d4af37]/10 rounded transition-colors"
-                            title="Edit"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-
                           {/* Actions Dropdown */}
                           <div className="relative">
                             <button
@@ -680,32 +655,21 @@ export default function UsersPage() {
                                       Activate
                                     </button>
                                   )}
-                                  {user.status !== 'inactive' && user.status !== 'deactivated' && (
-                                    <button
-                                      onClick={() => openStatusModal(user, 'inactive')}
-                                      className="w-full px-4 py-2 text-left text-sm text-gray-400 hover:bg-[#d4af37]/10 flex items-center gap-2"
-                                    >
-                                      <UserMinus className="w-4 h-4" />
-                                      Deactivate
-                                    </button>
-                                  )}
                                   {user.status !== 'suspended' && (
                                     <button
                                       onClick={() => openStatusModal(user, 'suspended')}
-                                      className="w-full px-4 py-2 text-left text-sm text-orange-400 hover:bg-[#d4af37]/10 flex items-center gap-2"
+                                      className={`w-full px-4 py-2 text-left text-sm hover:bg-red-500/10 flex items-center gap-2 ${
+                                        user.cancelledOrderCount >= CANCELLATION_THRESHOLD
+                                          ? 'text-red-400 font-semibold'
+                                          : 'text-orange-400'
+                                      }`}
                                     >
                                       <UserX className="w-4 h-4" />
-                                      Suspend
+                                      {user.cancelledOrderCount >= CANCELLATION_THRESHOLD
+                                        ? `Suspend (${user.cancelledOrderCount} cancelled)`
+                                        : 'Suspend'}
                                     </button>
                                   )}
-                                  <div className="border-t border-[#d4af37]/10 my-1"></div>
-                                  <button
-                                    onClick={() => openArchiveModal(user)}
-                                    className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2"
-                                  >
-                                    <Archive className="w-4 h-4" />
-                                    Archive
-                                  </button>
                                 </div>
                               </div>
                             )}
@@ -805,6 +769,27 @@ export default function UsersPage() {
                     </div>
                   </div>
 
+                  {/* Suspension warning banner */}
+                  {userDetails.stats.cancelledOrderCount >= CANCELLATION_THRESHOLD && selectedUser.status !== 'suspended' && (
+                    <div className="p-4 bg-red-500/10 border border-red-500/30 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+                        <p className="text-sm text-red-400">
+                          <span className="font-bold">{userDetails.stats.cancelledOrderCount} cancelled orders</span> — suspension threshold reached.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setIsViewModalOpen(false);
+                          openStatusModal(selectedUser, 'suspended');
+                        }}
+                        className="px-3 py-1.5 bg-red-500 text-white text-sm font-semibold hover:bg-red-600 transition-colors whitespace-nowrap"
+                      >
+                        Suspend Account
+                      </button>
+                    </div>
+                  )}
+
                   {/* Stats Grid */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="bg-white border border-[#e8e0d0] p-4">
@@ -840,18 +825,16 @@ export default function UsersPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="bg-white border border-[#e8e0d0] p-4">
+                    <div className={`bg-white border p-4 ${userDetails.stats.cancelledOrderCount >= CANCELLATION_THRESHOLD ? 'border-red-500/40' : 'border-[#e8e0d0]'}`}>
                       <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-[#d4af37]/10 rounded-full flex items-center justify-center">
-                          <Calendar className="w-5 h-5 text-[#d4af37]" />
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${userDetails.stats.cancelledOrderCount >= CANCELLATION_THRESHOLD ? 'bg-red-500/10' : 'bg-[#d4af37]/10'}`}>
+                          <AlertCircle className={`w-5 h-5 ${userDetails.stats.cancelledOrderCount >= CANCELLATION_THRESHOLD ? 'text-red-400' : 'text-[#7a6a4a]'}`} />
                         </div>
                         <div>
-                          <p className="text-lg font-bold text-[#1c1810]">
-                            {userDetails.orders[0]?.createdAt
-                              ? formatDate(userDetails.orders[0].createdAt)
-                              : 'Never'}
+                          <p className={`text-2xl font-bold ${userDetails.stats.cancelledOrderCount >= CANCELLATION_THRESHOLD ? 'text-red-400' : 'text-[#1c1810]'}`}>
+                            {userDetails.stats.cancelledOrderCount}
                           </p>
-                          <p className="text-xs text-[#7a6a4a]">Last Order</p>
+                          <p className="text-xs text-[#7a6a4a]">Cancelled Orders</p>
                         </div>
                       </div>
                     </div>
@@ -1053,6 +1036,15 @@ export default function UsersPage() {
                 </div>
               )}
 
+              {newStatus === 'suspended' && selectedUser.cancelledOrderCount >= CANCELLATION_THRESHOLD && (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-amber-400">
+                    This customer has <span className="font-bold">{selectedUser.cancelledOrderCount} cancelled orders</span>, meeting the suspension threshold of {CANCELLATION_THRESHOLD}.
+                  </p>
+                </div>
+              )}
+
               <div className="flex items-start space-x-3">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
                   newStatus === 'active' ? 'bg-green-500/20' :
@@ -1125,80 +1117,6 @@ export default function UsersPage() {
         </div>
       )}
 
-      {/* Archive Confirmation Modal */}
-      {isArchiveModalOpen && selectedUser && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-[#faf8f3] border border-[#e8e0d0] w-full max-w-md shadow-2xl">
-            <div className="px-6 py-4 border-b border-[#e8e0d0] flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-red-400">Archive Customer</h2>
-              <button
-                onClick={() => {
-                  setIsArchiveModalOpen(false);
-                  setSelectedUser(null);
-                }}
-                className="p-1 text-[#7a6a4a] hover:text-[#1c1810] transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              {formError && (
-                <div className="p-3 bg-red-500/20 border border-red-500/30 rounded text-red-400 text-sm">
-                  {formError}
-                </div>
-              )}
-
-              <div className="flex items-start space-x-3">
-                <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center flex-shrink-0">
-                  <Archive className="w-5 h-5 text-red-400" />
-                </div>
-                <div>
-                  <p className="text-[#1c1810]">
-                    Are you sure you want to archive{" "}
-                    <span className="font-semibold text-[#d4af37]">
-                      {selectedUser.firstName} {selectedUser.lastName}
-                    </span>
-                    ?
-                  </p>
-                  <p className="text-sm text-[#7a6a4a] mt-2">
-                    This user will be moved to the archived section. You can restore them later if needed.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="px-6 py-4 border-t border-[#e8e0d0] flex items-center justify-end gap-3">
-              <button
-                onClick={() => {
-                  setIsArchiveModalOpen(false);
-                  setSelectedUser(null);
-                }}
-                className="px-4 py-2 border border-[#e8e0d0] text-[#1c1810] hover:bg-[#d4af37]/5 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleArchiveUser}
-                disabled={isSubmitting}
-                className="px-4 py-2 bg-red-500 text-white font-medium hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center gap-2"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Archiving...
-                  </>
-                ) : (
-                  <>
-                    <Archive className="w-4 h-4" />
-                    Archive
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }

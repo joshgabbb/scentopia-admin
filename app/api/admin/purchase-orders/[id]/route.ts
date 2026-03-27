@@ -1,6 +1,7 @@
 // app/api/admin/purchase-orders/[id]/route.ts
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { logAuditAction } from "@/lib/audit-logger";
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
@@ -108,6 +109,16 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       const newStatus = smsError ? "failed" : "sent";
       await supabase.from("purchase_orders").update({ status: newStatus, sent_at: smsError ? null : new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", id);
 
+      if (!smsError) {
+        await logAuditAction({
+          action: "PO_SENT",
+          module: "PURCHASE_ORDER",
+          entityId: id,
+          entityLabel: (po as any).po_number,
+          metadata: { supplier: (await supabase.from("suppliers").select("name").eq("id", (po as any).supplier_id).single()).data?.name },
+        }, request);
+      }
+
       if (smsError) return NextResponse.json({ success: false, error: "SMS failed to send", details: String(smsError) }, { status: 500 });
       return NextResponse.json({ success: true, data: { status: newStatus } });
     }
@@ -117,6 +128,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         return NextResponse.json({ success: false, error: "Only draft, scheduled, or failed POs can be cancelled" }, { status: 400 });
       }
       await supabase.from("purchase_orders").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("id", id);
+
+      await logAuditAction({
+        action: "PO_CANCELLED",
+        module: "PURCHASE_ORDER",
+        entityId: id,
+        entityLabel: (po as any).po_number,
+        metadata: { previous_status: (po as any).status },
+      }, request);
+
       return NextResponse.json({ success: true, data: { status: "cancelled" } });
     }
 
@@ -143,6 +163,17 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
       const newStatus = smsError ? "failed" : "sent";
       await supabase.from("purchase_orders").update({ status: newStatus, sent_at: smsError ? null : new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", id);
+
+      if (!smsError) {
+        await logAuditAction({
+          action: "PO_SENT",
+          module: "PURCHASE_ORDER",
+          entityId: id,
+          entityLabel: (po as any).po_number,
+          metadata: { retry: true },
+        }, request);
+      }
+
       return NextResponse.json({ success: true, data: { status: newStatus } });
     }
 
@@ -164,13 +195,21 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: po } = await supabase.from("purchase_orders").select("status").eq("id", id).single();
+    const { data: po } = await supabase.from("purchase_orders").select("status, po_number").eq("id", id).single();
     if (!po || !["draft", "cancelled"].includes((po as any).status)) {
       return NextResponse.json({ success: false, error: "Only draft or cancelled POs can be deleted" }, { status: 400 });
     }
 
     const { error } = await supabase.from("purchase_orders").delete().eq("id", id);
     if (error) throw error;
+
+    await logAuditAction({
+      action: "PO_DELETED",
+      module: "PURCHASE_ORDER",
+      entityId: id,
+      entityLabel: (po as any).po_number,
+      metadata: { previous_status: (po as any).status },
+    }, request);
 
     return NextResponse.json({ success: true });
   } catch (error) {

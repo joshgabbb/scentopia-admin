@@ -1,7 +1,7 @@
 // app/admin/management/notifications/page.tsx
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -51,6 +51,7 @@ export default function NotificationsPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [, setTick] = useState(0); // For countdown refresh
+  const fetchNotificationsRef = useRef<() => void>(() => {});
 
   // Setup real-time subscription
   useEffect(() => {
@@ -69,8 +70,8 @@ export default function NotificationsPage() {
           },
           (payload) => {
             console.log('Notification change:', payload);
-            // Refresh the list on any change
-            fetchNotifications();
+            // Use ref to always call the latest fetchNotifications
+            fetchNotificationsRef.current();
           }
         )
         .subscribe();
@@ -147,6 +148,9 @@ export default function NotificationsPage() {
       setIsLoading(false);
     }
   };
+
+  // Keep ref in sync so the realtime callback always calls the latest version
+  fetchNotificationsRef.current = fetchNotifications;
 
   const resetForm = () => {
     setFormData({

@@ -190,7 +190,13 @@ export default function ProductsPage() {
     fetchProductStats();
   }, []);
 
-  const handleProductUpdate = (productId: string, updates: Partial<Product>) => {};
+  const handleProductUpdate = (productId: string, updates: Partial<Product>) => {
+    if (!data) return;
+    setData({
+      ...data,
+      products: data.products.map((p) => p.id === productId ? { ...p, ...updates } : p),
+    });
+  };
 
   const fetchProductDetails = async (productId: string) => {
     try {
@@ -207,7 +213,10 @@ export default function ProductsPage() {
   };
 
   const handleProductClick = (product: Product) => fetchProductDetails(product.id);
-  const handleBackToList = () => setSelectedProduct(null);
+  const handleBackToList = () => {
+    setSelectedProduct(null);
+    fetchProducts();
+  };
 
   const fetchProducts = async () => {
     try {
@@ -330,6 +339,7 @@ export default function ProductsPage() {
         product={selectedProduct}
         isLoading={isLoadingProduct}
         onBack={handleBackToList}
+        onProductUpdate={handleProductUpdate}
       />
     );
   }
@@ -460,7 +470,7 @@ export default function ProductsPage() {
                 <div className="grid grid-cols-3 gap-2">
                   {sizes.map(([size, price]) => (
                     <div key={size} className="border border-[#e8e0d0] rounded-lg px-3 py-2 bg-[#faf8f3]">
-                      <p className="text-xs text-[#7a6a4a] font-medium">{size}ml</p>
+                      <p className="text-xs text-[#7a6a4a] font-medium">{size}</p>
                       <p className="text-sm font-semibold text-[#1c1810]">{formatCurrency(price)}</p>
                       <p className="text-xs text-[#9a8a6a]">{stocks[size] ?? 0} in stock</p>
                     </div>

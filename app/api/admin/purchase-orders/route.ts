@@ -191,11 +191,11 @@ export async function POST(request: NextRequest) {
     }
 
     await logAuditAction({
-      action: "CREATE",
-      module: "INVENTORY",
+      action: "PO_CREATED",
+      module: "PURCHASE_ORDER",
       entityId: po.id,
       entityLabel: poNumber,
-      metadata: { supplier: supplier.name, item_count: items.length },
+      metadata: { supplier: supplier.name, item_count: items.length, status: po.status },
     }, request);
 
     return NextResponse.json({ success: true, data: { ...po, poNumber } }, { status: 201 });

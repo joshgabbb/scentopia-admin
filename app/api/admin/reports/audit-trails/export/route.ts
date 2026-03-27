@@ -3,6 +3,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { logExport } from "@/lib/audit-logger";
 
 export async function GET(request: NextRequest) {
   try {
@@ -100,6 +101,8 @@ export async function GET(request: NextRequest) {
     if (actionFilter !== 'all') filename += `-${actionFilter}`;
     if (entityFilter !== 'all') filename += `-${entityFilter}`;
     filename += `-${new Date().toISOString().split('T')[0]}.csv`;
+
+    logExport("REPORT", "csv", logs.length, request);
 
     return new NextResponse(csv, {
       status: 200,

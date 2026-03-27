@@ -209,7 +209,7 @@ export async function POST(request: NextRequest) {
     logAuditAction(
       {
         action: "CREATE",
-        module: "SYSTEM",
+        module: "VOUCHER",
         entityId: data.id,
         entityLabel: `Voucher: ${data.code}`,
         newValue: { code: data.code, discountType, discountValue },
@@ -263,7 +263,7 @@ export async function PUT(request: NextRequest) {
     if (error) throw error;
 
     logAuditAction(
-      { action: "UPDATE", module: "SYSTEM", entityId: id, entityLabel: `Voucher: ${data?.code}`, newValue: updatePayload },
+      { action: "UPDATE", module: "VOUCHER", entityId: id, entityLabel: `Voucher: ${data?.code}`, newValue: updatePayload },
       request
     );
 
@@ -294,14 +294,14 @@ export async function DELETE(request: NextRequest) {
     if (voucher?.used_count > 0) {
       // Deactivate instead of delete
       await supabase.from("vouchers").update({ is_active: false }).eq("id", id);
-      logAuditAction({ action: "UPDATE", module: "SYSTEM", entityId: id, entityLabel: `Voucher: ${voucher.code}`, metadata: { reason: "deactivated instead of deleted (has usage)" } }, request);
+      logAuditAction({ action: "UPDATE", module: "VOUCHER", entityId: id, entityLabel: `Voucher: ${voucher.code}`, metadata: { reason: "deactivated instead of deleted (has usage)" } }, request);
       return NextResponse.json({ success: true, message: "Voucher has been used — it was deactivated instead of deleted." });
     }
 
     const { error } = await supabase.from("vouchers").delete().eq("id", id);
     if (error) throw error;
 
-    logAuditAction({ action: "DELETE", module: "SYSTEM", entityId: id, entityLabel: `Voucher: ${voucher?.code}` }, request);
+    logAuditAction({ action: "DELETE", module: "VOUCHER", entityId: id, entityLabel: `Voucher: ${voucher?.code}` }, request);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("DELETE /api/admin/vouchers error:", error);

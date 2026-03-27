@@ -13,6 +13,7 @@ import {
   Users,
   Settings,
   LogOut,
+  CreditCard,
   Shield,
   ChevronRight,
   ChevronDown,
@@ -29,6 +30,7 @@ import {
   AlertTriangle,
   Barcode,
   Layers,
+  PackageOpen,
   ArrowDownToLine,
   ArrowUpFromLine,
   ClipboardList,
@@ -66,10 +68,12 @@ const menuItems: MenuItem[] = [
       { id: "slow-moving", label: "Slow-Moving", icon: TrendingDown },
       { id: "archived", label: "Archived", icon: Archive },
       { id: "barcodes", label: "Barcodes", icon: Barcode },
+      { id: "bundles", label: "Bundles", icon: PackageOpen },
     ],
   },
   { id: "reports", label: "Reports", icon: BarChart3 },
   { id: "orders", label: "Orders", icon: ShoppingBag },
+  { id: "payments", label: "Payments", icon: CreditCard },
   {
     id: "inventory",
     label: "Inventory",
@@ -101,7 +105,6 @@ const menuItems: MenuItem[] = [
     icon: Users,
     children: [
       { id: "users", label: "All Clients", icon: Users },
-      { id: "users-archived", label: "Archived", icon: Archive },
     ],
   },
 ];
@@ -416,7 +419,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
 
   // Auto-expand parent menu when on a child page
   useEffect(() => {
-    const productChildIds = ["products", "categories", "tags", "sizes", "archived", "fast-moving", "slow-moving", "barcodes"];
+    const productChildIds = ["products", "categories", "tags", "sizes", "archived", "fast-moving", "slow-moving", "barcodes", "bundles"];
     const clientChildIds = ["users", "users-archived"];
     const managementChildIds = ["audit-trails", "feedback", "notifications", "inventory-alerts", "refunds", "vouchers"];
     const inventoryChildIds = ["stock-in", "stock-out", "stock-history", "pos"];
@@ -571,6 +574,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                         if (item.id === "products" && child.id === "fast-moving") childHref = "/admin/products/fast-moving";
                         if (item.id === "products" && child.id === "slow-moving") childHref = "/admin/products/slow-moving";
                         if (item.id === "products" && child.id === "barcodes") childHref = "/admin/products/barcodes";
+                        if (item.id === "products" && child.id === "bundles") childHref = "/admin/products/bundles";
                         // Management children routes
                         if (item.id === "management") childHref = `/admin/management/${child.id}`;
                         if (item.id === "inventory") childHref = `/admin/inventory/${child.id}`;

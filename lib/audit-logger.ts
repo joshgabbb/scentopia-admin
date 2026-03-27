@@ -25,7 +25,17 @@ export type AuditAction =
   | "CONFIG_CHANGE"
   | "IMAGE_UPLOAD"
   | "EXPORT"
-  | "ROLE_CHANGE";
+  | "ROLE_CHANGE"
+  | "APPROVE"
+  | "DECLINE"
+  | "ARCHIVE"
+  | "RESTORE"
+  | "SUSPEND"
+  | "PO_CREATED"
+  | "PO_SENT"
+  | "PO_RECEIVED"
+  | "PO_CANCELLED"
+  | "PO_DELETED";
 
 // ─── Module types ──────────────────────────────────────────────────────────
 export type AuditModule =
@@ -36,12 +46,18 @@ export type AuditModule =
   | "ORDER"
   | "USER"
   | "INVENTORY"
+  | "PURCHASE_ORDER"
   | "NOTIFICATION"
   | "FEEDBACK"
   | "AUTH"
   | "SETTINGS"
   | "SYSTEM"
-  | "REPORT";
+  | "REPORT"
+  | "VOUCHER"
+  | "REFUND"
+  | "BUNDLE"
+  | "BARCODE"
+  | "CASHOUT";
 
 // ─── Log entry shape ───────────────────────────────────────────────────────
 export interface AuditLogEntry {
@@ -67,6 +83,12 @@ const ENTITY_TYPE_MAP: Partial<Record<AuditModule, string>> = {
   INVENTORY:    "inventory",
   NOTIFICATION: "notification",
   SETTINGS:     "settings",
+  VOUCHER:      "voucher",
+  REFUND:       "refund",
+  BUNDLE:       "bundle",
+  BARCODE:      "barcode",
+  CASHOUT:      "cashout",
+  PURCHASE_ORDER: "purchase_order",
   // AUTH, SYSTEM, REPORT, TAG, SIZE, FEEDBACK → null (entity_type is nullable after migration)
 };
 

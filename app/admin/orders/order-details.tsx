@@ -3,6 +3,8 @@ import React, { useState, useRef, useEffect } from "react";
 import { ArrowLeft, Copy, ExternalLink, ChevronRight, MoreHorizontal, Package, Truck, X, RotateCcw, CheckCircle, XCircle, Clock } from "lucide-react";
 import CustomSidebar from "@/components/modals/sidebar";
 import JntSidebar from "@/components/admin/sidebars/jntsidebar";
+import LalaMoveSidebar from "@/components/admin/sidebars/lalamovesidebar";
+import { Zap } from "lucide-react";
 
 interface PaymentInfo {
   paymentId: string;
@@ -56,15 +58,21 @@ interface Order {
       courier_name?: string;
       shipping_fee?: number;
       estimated_delivery?: string;
+      lalamove_order_id?: string;
+      tracking_url?: string;
     };
   };
   waybillNumber?: string;
   courierCode?: string;
+  courierProvider?: string;
+  trackingUrl?: string;
   shippingFee?: number;
   estimatedDelivery?: string;
   voucherCode?: string | null;
   discountAmount?: number;
   originalAmount?: number | null;
+  recipientName?: string;
+  recipientPhone?: string;
 }
 
 interface OrderDetailsProps {
@@ -148,11 +156,13 @@ const isPaidOrder = (order: Order) => {
 const OrderActionsDropdown = ({
   order,
   onStatusUpdate,
-  onOpenJntSidebar
+  onOpenJntSidebar,
+  onOpenLalamoveSidebar,
 }: {
   order: Order;
   onStatusUpdate: (newStatus: string) => void;
   onOpenJntSidebar: () => void;
+  onOpenLalamoveSidebar: () => void;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -221,26 +231,46 @@ const OrderActionsDropdown = ({
           </button>
         );
 
-      case 'Processing':
+      case 'Processing': {
+        const customerWantsLalamove = order.courierProvider === 'lalamove';
         return (
           <>
             <div className="px-4 py-2 text-xs text-[#7a6a4a] font-semibold border-b border-[#d4af37]/10">
-              SHIP WITH COURIER
+              CREATE SHIPMENT
+            </div>
+            <div className="px-4 py-1.5 text-xs text-[#8B6914] bg-[#d4af37]/10 border-b border-[#d4af37]/10">
+              Customer chose: <span className="font-semibold">{customerWantsLalamove ? 'Lalamove (Same-Day)' : 'J&T Express (Standard)'}</span>
             </div>
             <button
               onClick={() => {
                 setIsOpen(false);
                 onOpenJntSidebar();
               }}
-              className="w-full text-left px-4 py-2 text-sm text-[#1c1810] dark:text-[#f0e8d8] hover:bg-red-500/10 flex items-center gap-2 transition-colors"
+              className={`w-full text-left px-4 py-2 text-sm text-[#1c1810] dark:text-[#f0e8d8] hover:bg-red-500/10 flex items-center gap-2 transition-colors ${!customerWantsLalamove ? 'bg-red-500/5' : ''}`}
             >
               <Truck size={16} className="text-red-500" />
               <span>J&T Express</span>
+              <span className="ml-auto text-xs text-[#9a8a68]">Standard</span>
+              {!customerWantsLalamove && <span className="text-xs text-red-500 font-semibold">★</span>}
+            </button>
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                onOpenLalamoveSidebar();
+              }}
+              className={`w-full text-left px-4 py-2 text-sm text-[#1c1810] dark:text-[#f0e8d8] hover:bg-yellow-500/10 flex items-center gap-2 transition-colors ${customerWantsLalamove ? 'bg-yellow-500/5' : ''}`}
+            >
+              <Zap size={16} className="text-yellow-500" />
+              <span>Lalamove</span>
+              <span className="ml-auto text-xs text-[#9a8a68]">Same-Day</span>
+              {customerWantsLalamove && <span className="text-xs text-yellow-600 font-semibold">★</span>}
             </button>
           </>
         );
+      }
 
-      case 'To Ship':
+      case 'To Ship': {
+        const isLalamove = order.courierProvider === 'lalamove';
         return (
           <button
             onClick={async () => {
@@ -252,8 +282,11 @@ const OrderActionsDropdown = ({
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     status: 'Shipped',
-                    title: 'Order Handed to J&T Express',
-                    body: 'Your order has been handed to J&T Express and is now on its way.',
+                    title: isLalamove ? 'Order Picked Up by Lalamove' : 'Order Handed to J&T Express',
+                    body: isLalamove
+                      ? 'A Lalamove driver has picked up your order and it is on its way.'
+                      : 'Your order has been handed to J&T Express and is now on its way.',
+                    ...(order.trackingUrl ? { tracking_url: order.trackingUrl } : {}),
                   }),
                 });
                 onStatusUpdate('Shipped');
@@ -267,9 +300,10 @@ const OrderActionsDropdown = ({
             className="w-full text-left px-4 py-2 text-sm text-[#1c1810] dark:text-[#f0e8d8] hover:bg-amber-500/10 flex items-center gap-2 disabled:opacity-50 transition-colors"
           >
             <Truck size={16} className="text-amber-500" />
-            {isUpdating ? 'Updating...' : 'Confirm Handoff to J&T'}
+            {isUpdating ? 'Updating...' : isLalamove ? 'Confirm Handoff to Lalamove' : 'Confirm Handoff to J&T'}
           </button>
         );
+      }
 
       default:
         return (
@@ -316,6 +350,7 @@ interface RefundRecord {
 export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsProps) {
   const [currentOrder, setCurrentOrder] = useState(order);
   const [isJntSidebarOpen, setIsJntSidebarOpen] = useState(false);
+  const [isLalamoveSidebarOpen, setIsLalamoveSidebarOpen] = useState(false);
   const [internalNote, setInternalNote] = useState(order?.note || '');
   const [refund, setRefund] = useState<RefundRecord | null>(null);
   const [refundLoading, setRefundLoading] = useState(false);
@@ -455,6 +490,7 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
               order={currentOrder}
               onStatusUpdate={handleStatusUpdate}
               onOpenJntSidebar={() => setIsJntSidebarOpen(true)}
+              onOpenLalamoveSidebar={() => setIsLalamoveSidebarOpen(true)}
             />
           </div>
 
@@ -551,17 +587,25 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
                 )}
                 {currentOrder.status === 'Processing' && (
                   <p className="text-xs text-[#7a6a4a] text-center">
-                    Use the <span className="font-semibold text-[#8B6914]">⋯ menu</span> → <span className="font-semibold text-[#8B6914]">J&T Express</span> to generate the waybill while packing
+                    Use the <span className="font-semibold text-[#8B6914]">⋯ menu</span> → <span className="font-semibold text-[#8B6914]">
+                      {currentOrder.courierProvider === 'lalamove' ? 'Lalamove' : 'J&T Express'}
+                    </span> to create the shipment while packing
                   </p>
                 )}
                 {currentOrder.status === 'To Ship' && (
                   <p className="text-xs text-[#7a6a4a] text-center">
-                    Use the <span className="font-semibold text-amber-600">⋯ menu</span> → <span className="font-semibold text-amber-600">Confirm Handoff to J&T</span> once you hand the package to the courier
+                    {currentOrder.courierProvider === 'lalamove'
+                      ? <>Use the <span className="font-semibold text-amber-600">⋯ menu</span> → <span className="font-semibold text-amber-600">Confirm Handoff to Lalamove</span> once the driver picks up</>
+                      : <>Use the <span className="font-semibold text-amber-600">⋯ menu</span> → <span className="font-semibold text-amber-600">Confirm Handoff to J&T</span> once you hand the package to the courier</>
+                    }
                   </p>
                 )}
                 {currentOrder.status === 'Shipped' && (
                   <p className="text-xs text-[#7a6a4a] text-center">
-                    Package handed to J&T Express — waiting for customer to confirm receipt
+                    {currentOrder.courierProvider === 'lalamove'
+                      ? 'Package handed to Lalamove driver — waiting for customer to confirm receipt'
+                      : 'Package handed to J&T Express — waiting for customer to confirm receipt'
+                    }
                   </p>
                 )}
                 {currentOrder.status === 'Delivered' && (
@@ -832,6 +876,12 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
                     <h2 className="text-lg font-semibold text-[#d4af37]">Tracking Information</h2>
                   </div>
                   <div className="p-6 space-y-4">
+                    <div>
+                      <p className="text-sm text-[#7a6a4a]">Courier</p>
+                      <p className="font-medium text-[#1c1810]">
+                        {currentOrder.courierProvider === 'lalamove' ? 'Lalamove (Same-Day)' : 'J&T Express'}
+                      </p>
+                    </div>
                     {currentOrder.trackingNumber && (
                       <div>
                         <p className="text-sm text-[#7a6a4a]">Tracking Number</p>
@@ -846,10 +896,18 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
                         </div>
                       </div>
                     )}
-                    {currentOrder.courier && (
+                    {currentOrder.trackingUrl && (
                       <div>
-                        <p className="text-sm text-[#7a6a4a]">Courier</p>
-                        <p className="font-medium text-[#1c1810]">{currentOrder.courier}</p>
+                        <p className="text-sm text-[#7a6a4a] mb-1">Tracking Link</p>
+                        <a
+                          href={currentOrder.trackingUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 underline underline-offset-2 transition-colors"
+                        >
+                          <ExternalLink size={14} />
+                          {currentOrder.courierProvider === 'lalamove' ? 'Track on Lalamove' : 'Track on J&T'}
+                        </a>
                       </div>
                     )}
                   </div>
@@ -868,6 +926,18 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
         <JntSidebar
           order={currentOrder}
           onClose={() => setIsJntSidebarOpen(false)}
+          onStatusUpdate={handleStatusUpdate}
+        />
+      </CustomSidebar>
+
+      <CustomSidebar
+        isOpen={isLalamoveSidebarOpen}
+        onClose={() => setIsLalamoveSidebarOpen(false)}
+        title="Same-Day Delivery via Lalamove"
+      >
+        <LalaMoveSidebar
+          order={currentOrder!}
+          onClose={() => setIsLalamoveSidebarOpen(false)}
           onStatusUpdate={handleStatusUpdate}
         />
       </CustomSidebar>

@@ -51,14 +51,14 @@ export async function GET(request: Request) {
 
     const supabase = await createClient();
 
-    // Fetch last 12 months of non-cancelled orders — enough for a realistic moving average
-    const twelveMonthsAgo = new Date();
-    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+    // Fetch last 6 months of non-cancelled orders — matches WMA window
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
     const { data: orders, error } = await supabase
       .from('orders')
       .select('amount, created_at, order_status')
-      .gte('created_at', twelveMonthsAgo.toISOString())
+      .gte('created_at', sixMonthsAgo.toISOString())
       .neq('order_status', 'Cancelled')
       .order('created_at', { ascending: true });
 

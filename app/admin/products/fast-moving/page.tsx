@@ -103,9 +103,9 @@ export default function FastMovingPage() {
         sold:     p.unitsSold,
         revenue:  p.totalRevenue,
         stock:    p.currentStock,
-        avgDaily: p.avgDailySales.toFixed(2),
+        velocity: p.avgDailySales.toFixed(2),
         daysLeft: p.daysRemaining ?? "N/A",
-        restock:  p.restockStatus.toUpperCase(),
+        status:   p.restockStatus.toUpperCase(),
         type:     p.classification === "very_fast" ? "Very Fast" : "Fast",
       })),
       "fast-moving",
@@ -113,9 +113,9 @@ export default function FastMovingPage() {
     );
     config.additionalInfo = [
       { label: "Analysis Period",        value: `Last ${days} days` },
-      { label: "Classification Rule",    value: `Fast = sold ≥ ${thresholds.fast} units | Very Fast = sold ≥ ${thresholds.veryFast} units` },
+      { label: "Classification Rule",    value: `Fast: >=${thresholds.fast} units | Very Fast: >=${thresholds.veryFast} units` },
       { label: "Total Units Sold",       value: summary.totalUnitsSold.toLocaleString() },
-      { label: "Total Revenue",          value: formatCurrency(summary.totalRevenue) },
+      { label: "Total Revenue",          value: `PHP ${summary.totalRevenue.toLocaleString()}` },
       { label: "Items Needing Restock",  value: summary.needsRestockCount.toString() },
     ];
     exportReport(config, options.format);

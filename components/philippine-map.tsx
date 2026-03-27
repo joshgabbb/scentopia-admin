@@ -107,19 +107,21 @@ const PhilippineMap = forwardRef<PhilippineMapRef, PhilippineMapProps>(({
 
     svgEl.removeAttribute("width");
     svgEl.removeAttribute("height");
-
-    // Use explicit pixel dimensions read from the DOM so the SVG always
-    // fills the container exactly, regardless of CSS context (flex, block, grid).
-    svgEl.style.width = containerW > 0 ? `${containerW}px` : "100%";
-    svgEl.style.height = containerH > 0 ? `${containerH}px` : "100%";
     svgEl.style.display = "block";
-
-    // xMidYMid meet: scale the viewBox to fit within the viewport while
-    // maintaining aspect ratio and centering it.
     svgEl.setAttribute("preserveAspectRatio", "xMidYMid meet");
 
-    if (!svgEl.getAttribute("viewBox")) {
-      svgEl.setAttribute("viewBox", "0 0 702.39 1209.4381");
+    if (currentRegion === "all") {
+      // Let the SVG expand to its natural height so the full Philippines
+      // is always visible without any clipping.
+      svgEl.setAttribute("viewBox", "-165 -180 880 1410");
+      svgEl.style.width = "100%";
+      svgEl.style.height = "auto";
+    } else {
+      svgEl.style.width = "100%";
+      svgEl.style.height = "100%";
+      if (!svgEl.getAttribute("viewBox")) {
+        svgEl.setAttribute("viewBox", "0 0 702.39 1209.4381");
+      }
     }
   };
 

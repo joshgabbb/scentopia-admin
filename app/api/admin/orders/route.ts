@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
         order_status,
         email,
         note,
+        courier_provider,
         profiles!orders_user_id_fkey(
           first_name,
           last_name,
@@ -141,6 +142,7 @@ export async function GET(request: NextRequest) {
         createdAt: order.created_at,
         orderNumber,
         itemCount,
+        courierProvider: (order as any).courier_provider || 'jnt',
         payment: paymentInfo,
         items: order.order_items?.map((item: any) => ({
           quantity: Number(item.quantity),

@@ -1,122 +1,7 @@
 // app/api/admin/orders/create-delivery/route.ts
-import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
-import crypto from 'crypto';
-
-// Lalamove service integration
-class LalamoveService {
-  private apiKey: string;
-  private apiSecret: string;
-  private market: string;
-  private baseUrl: string;
-
-  constructor() {
-    this.apiKey = process.env.NEXT_PUBLIC_LALAMOVE_API_KEY!;
-    this.apiSecret = process.env.LALAMOVE_API_SECRET!;
-    this.market = process.env.LALAMOVE_MARKET!;
-    this.baseUrl = process.env.LALAMOVE_BASE_URL!;
-
-    // Validate environment variables
-    if (!this.apiKey || !this.apiSecret || !this.market || !this.baseUrl) {
-      throw new Error('Missing required Lalamove environment variables');
-    }
-  }
-
-  private generateSignature(timestamp: string, method: string, path: string, body: string = ''): string {
-    const rawSignature = `${timestamp}\r\n${method}\r\n${path}\r\n\r\n${body}`;
-    console.log('Raw signature string:', JSON.stringify(rawSignature));
-    console.log('Raw signature bytes:', rawSignature.length);
-    const signature = crypto.createHmac('sha256', this.apiSecret).update(rawSignature, 'utf8').digest('hex');
-    console.log('Generated signature:', signature);
-    return signature;
-  }
-
-  private generateHeaders(method: string, path: string, body?: any): Record<string, string> {
-    const timestamp = Date.now().toString();
-    
-    // For POST requests, we need to stringify the body exactly as it will be sent
-    let bodyString = '';
-    if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
-      // Stringify without extra spaces to match exactly what fetch will send
-      bodyString = JSON.stringify(body);
-    }
-    
-    console.log('Headers generation:');
-    console.log('- Method:', method);
-    console.log('- Path:', path);
-    console.log('- Body length:', bodyString.length);
-    console.log('- Body preview:', bodyString.substring(0, 100) + '...');
-    
-    const signature = this.generateSignature(timestamp, method, path, bodyString);
-    
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `hmac ${this.apiKey}:${timestamp}:${signature}`,
-      'Market': this.market,
-      'Request-ID': crypto.randomUUID(),
-    };
-    
-    console.log('Generated headers (auth redacted):', {
-      ...headers,
-      'Authorization': `hmac ${this.apiKey.substring(0, 10)}...:${timestamp}:${signature.substring(0, 10)}...`
-    });
-    
-    return headers;
-  }
-
-  private async makeRequest<T>(method: string, path: string, body?: any): Promise<any> {
-    const headers = this.generateHeaders(method, path, body);
-    const url = `${this.baseUrl}${path}`;
-    
-    console.log('Making Lalamove request:', {
-      method,
-      url,
-      headers: {
-        ...headers,
-        'Authorization': 'hmac [REDACTED]' // Don't log full auth header
-      }
-    });
-
-    try {
-      const response = await fetch(url, {
-        method,
-        headers,
-        body: body ? JSON.stringify(body) : undefined,
-      });
-
-      const responseText = await response.text();
-      console.log('Lalamove response:', {
-        status: response.status,
-        statusText: response.statusText,
-        body: responseText
-      });
-
-      let responseData;
-      try {
-        responseData = JSON.parse(responseText);
-      } catch (parseError) {
-        throw new Error(`Invalid JSON response: ${responseText}`);
-      }
-
-      if (!response.ok) {
-        throw new Error(`Lalamove API Error: ${response.status} - ${responseData.message || responseText}`);
-      }
-
-      return responseData;
-    } catch (fetchError) {
-      console.error('Fetch error:', fetchError);
-      throw fetchError;
-    }
-  }
-
-  async getQuotation(quotationData: any) {
-    return await this.makeRequest('POST', '/v3/quotations', { data: quotationData });
-  }
-
-  async placeOrder(orderData: any) {
-    return await this.makeRequest('POST', '/v3/orders', { data: orderData });
-  }
-}
+import { LalamoveService } from '@/lib/lalamove-service';
+import { createAdminClient } from '@/lib/supabase/server';
 
 export async function POST(request: NextRequest) {
   console.log('=== CREATE DELIVERY ENDPOINT CALLED ===');
@@ -151,20 +36,27 @@ export async function POST(request: NextRequest) {
     console.log('- specialRequests:', specialRequests);
     console.log('- notes:', notes);
 
-    // Step 3: Validate required fields
+    // Step 3: Validate required fields — pickupAddress & senderInfo fall back to env vars
     console.log('Step 3: Validating required fields...');
-    if (!orderId || !pickupAddress || !deliveryAddress || !senderInfo || !recipientInfo) {
+
+    // Fall back to store env vars if pickup/sender not provided
+    const resolvedPickup = pickupAddress ?? {
+      lat: parseFloat(process.env.LALAMOVE_STORE_LAT || '14.5851'),
+      lng: parseFloat(process.env.LALAMOVE_STORE_LNG || '121.1762'),
+      address: process.env.LALAMOVE_STORE_ADDRESS
+        || 'Block 1 Lot 67, San Jose Heights, Brgy. San Jose, Antipolo City, Rizal',
+    };
+    const resolvedSender = senderInfo ?? {
+      name: process.env.LALAMOVE_SENDER_NAME || 'Scentopia',
+      phone: process.env.LALAMOVE_SENDER_PHONE || '+63000000000',
+    };
+
+    if (!orderId || !deliveryAddress || !recipientInfo) {
       console.error('✗ Missing required fields');
-      console.error('- orderId exists:', !!orderId);
-      console.error('- pickupAddress exists:', !!pickupAddress);
-      console.error('- deliveryAddress exists:', !!deliveryAddress);
-      console.error('- senderInfo exists:', !!senderInfo);
-      console.error('- recipientInfo exists:', !!recipientInfo);
-      
       return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Missing required fields: orderId, pickupAddress, deliveryAddress, senderInfo, recipientInfo' 
+        {
+          success: false,
+          error: 'Missing required fields: orderId, deliveryAddress, recipientInfo'
         },
         { status: 400 }
       );
@@ -173,15 +65,15 @@ export async function POST(request: NextRequest) {
 
     // Step 4: Validate coordinates
     console.log('Step 4: Validating coordinates...');
-    if (!pickupAddress.lat || !pickupAddress.lng || !deliveryAddress.lat || !deliveryAddress.lng) {
+    if (!resolvedPickup.lat || !resolvedPickup.lng || !deliveryAddress.lat || !deliveryAddress.lng) {
       console.error('✗ Missing coordinates');
-      console.error('- pickup lat/lng:', pickupAddress.lat, pickupAddress.lng);
+      console.error('- pickup lat/lng:', resolvedPickup.lat, resolvedPickup.lng);
       console.error('- delivery lat/lng:', deliveryAddress.lat, deliveryAddress.lng);
-      
+
       return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Missing coordinates in pickup or delivery address' 
+        {
+          success: false,
+          error: 'Missing coordinates in pickup or delivery address'
         },
         { status: 400 }
       );
@@ -190,9 +82,9 @@ export async function POST(request: NextRequest) {
 
     // Step 5: Validate phone numbers
     console.log('Step 5: Validating phone numbers...');
-    if (!senderInfo.phone?.startsWith('+') || !recipientInfo.phone?.startsWith('+')) {
+    if (!resolvedSender.phone?.startsWith('+') || !recipientInfo.phone?.startsWith('+')) {
       console.error('✗ Invalid phone number format');
-      console.error('- sender phone:', senderInfo.phone);
+      console.error('- sender phone:', resolvedSender.phone);
       console.error('- recipient phone:', recipientInfo.phone);
       
       return NextResponse.json(
@@ -229,14 +121,14 @@ export async function POST(request: NextRequest) {
 
     const quotationRequest = {
       serviceType,
-      language: 'en_PH', // Adjust based on your market
+      language: 'en_PH',
       stops: [
         {
           coordinates: {
-            lat: pickupAddress.lat.toString(),
-            lng: pickupAddress.lng.toString()
+            lat: resolvedPickup.lat.toString(),
+            lng: resolvedPickup.lng.toString()
           },
-          address: pickupAddress.address
+          address: resolvedPickup.address
         },
         {
           coordinates: {
@@ -326,8 +218,8 @@ export async function POST(request: NextRequest) {
       quotationId,
       sender: {
         stopId: stops[0].stopId,
-        name: senderInfo.name,
-        phone: senderInfo.phone
+        name: resolvedSender.name,
+        phone: resolvedSender.phone
       },
       recipients: [
         {
@@ -337,12 +229,10 @@ export async function POST(request: NextRequest) {
           remarks: notes || `Order #${orderId}`
         }
       ],
-      isPODEnabled: true,
-      partner: "Your Business Name", // Replace with your business name
+      isPODEnabled: false,
+      partner: process.env.LALAMOVE_SENDER_NAME || 'Scentopia',
       metadata: {
         orderId: orderId,
-        customerEmail: "test@gmail.com",
-        orderAmount: 100
       }
     };
 
@@ -386,15 +276,58 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('Step 11: Preparing success response...');
+    const shareLink = lalamoveOrder.data.shareLink || '';
+    const deliveryAmount = lalamoveOrder.data.priceBreakdown?.total || 'N/A';
+    const deliveryCurrency = lalamoveOrder.data.priceBreakdown?.currency || 'PHP';
+
+    // Step 11: Persist Lalamove order details to orders table
+    console.log('Step 11: Saving Lalamove order details to database...');
+    try {
+      const supabase = createAdminClient();
+      const { data: currentOrder } = await supabase
+        .from('orders')
+        .select('delivery_location, user_id')
+        .eq('id', orderId)
+        .single();
+
+      const updatedDeliveryLocation = {
+        ...(currentOrder?.delivery_location || {}),
+        courier_info: {
+          courier_code: 'LALAMOVE',
+          courier_name: 'Lalamove',
+          lalamove_order_id: lalamoveOrder.data.orderId,
+          quotation_id: quotationId,
+          tracking_url: shareLink,
+          delivery_amount: deliveryAmount,
+          currency: deliveryCurrency,
+          shipped_at: new Date().toISOString(),
+        },
+      };
+
+      await supabase
+        .from('orders')
+        .update({
+          courier_provider: 'lalamove',
+          delivery_location: updatedDeliveryLocation,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', orderId);
+
+      console.log('✓ Lalamove order details saved to database');
+    } catch (dbError) {
+      // Non-critical — delivery was placed, just log the DB error
+      console.error('⚠️ Failed to save Lalamove details to DB:', dbError);
+    }
+
+    console.log('Step 12: Preparing success response...');
     const successResponse = {
       success: true,
       data: {
         lalamoveOrderId: lalamoveOrder.data.orderId,
         quotationId: quotationId,
-        shareLink: lalamoveOrder.data.shareLink,
-        deliveryAmount: lalamoveOrder.data.priceBreakdown?.total || 'N/A',
-        currency: lalamoveOrder.data.priceBreakdown?.currency || 'PHP',
+        shareLink,
+        deliveryAmount,
+        currency: deliveryCurrency,
         estimatedDeliveryTime: quotationResult.data.scheduleAt,
         driverId: lalamoveOrder.data.driverId || '',
         status: lalamoveOrder.data.status

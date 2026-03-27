@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useRef, useEffect } from "react";
-import { ArrowLeft, Copy, Package, Edit, Trash2, Eye, EyeOff, MoreHorizontal, ExternalLink } from "lucide-react";
+import { ArrowLeft, Copy, Package, Edit, Archive, Eye, EyeOff, MoreHorizontal, ExternalLink } from "lucide-react";
 import CustomSidebar from "@/components/modals/sidebar";
 import EditProduct from "@/components/admin/sidebars/editproduct-sidebar";
 import { CategoryData } from "@/app/api/admin/products/route";
@@ -31,6 +31,7 @@ interface ProductDetailsProps {
   product: Product | null;
   isLoading: boolean;
   onBack: () => void;
+  onProductUpdate?: (productId: string, updates: Partial<Product>) => void;
 }
 
 const formatCurrency = (amount: number) => {
@@ -117,22 +118,23 @@ const ProductActionsDropdown = ({
     }
   };
 
-  const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this product? This action cannot be undone.')) {
+  const handleArchive = async () => {
+    if (!confirm('Are you sure you want to archive this product? You can restore it from the Archived Products page.')) {
       return;
     }
 
     setIsUpdating(true);
     try {
-      const response = await fetch(`/api/admin/products/${product.id}`, {
+      const response = await fetch(`/api/admin/products?id=${product.id}&action=archive`, {
         method: 'DELETE'
       });
 
-      if (response.ok) {
+      const result = await response.json();
+      if (result.success) {
         window.location.href = '/admin/products';
       }
     } catch (error) {
-      console.error('Failed to delete product:', error);
+      console.error('Failed to archive product:', error);
     } finally {
       setIsUpdating(false);
     }
@@ -170,12 +172,12 @@ const ProductActionsDropdown = ({
             </button>
             <div className="border-t border-[#d4af37]/10 my-1"></div>
             <button
-              onClick={handleDelete}
+              onClick={handleArchive}
               disabled={isUpdating}
-              className="w-full text-left px-4 py-2 text-sm hover:bg-[#d4af37]/10 text-red-400 flex items-center gap-2 disabled:opacity-50 transition-colors"
+              className="w-full text-left px-4 py-2 text-sm hover:bg-[#d4af37]/10 text-amber-600 flex items-center gap-2 disabled:opacity-50 transition-colors"
             >
-              <Trash2 size={16} />
-              {isUpdating ? 'Deleting...' : 'Delete Product'}
+              <Archive size={16} />
+              {isUpdating ? 'Archiving...' : 'Archive Product'}
             </button>
           </div>
         </div>
@@ -184,7 +186,7 @@ const ProductActionsDropdown = ({
   );
 };
 
-export default function ProductDetails({ product, isLoading, onBack }: ProductDetailsProps) {
+export default function ProductDetails({ product, isLoading, onBack, onProductUpdate }: ProductDetailsProps) {
   const router = useRouter();
   const [currentProduct, setCurrentProduct] = useState(product);
   const [selectedImage, setSelectedImage] = useState(0);
@@ -201,6 +203,7 @@ export default function ProductDetails({ product, isLoading, onBack }: ProductDe
   const handleProductUpdate = (productId: string, updates: Partial<Product>) => {
     if (currentProduct && currentProduct.id === productId) {
       setCurrentProduct({ ...currentProduct, ...updates });
+      onProductUpdate?.(productId, updates);
     }
   };
 

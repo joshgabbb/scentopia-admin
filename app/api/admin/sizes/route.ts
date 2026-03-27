@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { logAuditAction } from "@/lib/audit-logger";
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
@@ -111,6 +112,8 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
 
+    logAuditAction({ action: "CREATE", module: "SIZE", entityId: size.id, entityLabel: size.name, newValue: { name: size.name } }, request);
+
     return NextResponse.json({
       success: true,
       data: size,
@@ -190,6 +193,8 @@ export async function PUT(request: NextRequest) {
       }, { status: 404 });
     }
 
+    logAuditAction({ action: "UPDATE", module: "SIZE", entityId: id, entityLabel: size.name, newValue: updateData }, request);
+
     return NextResponse.json({
       success: true,
       data: size,
@@ -261,6 +266,8 @@ export async function DELETE(request: NextRequest) {
 
       if (error) throw error;
 
+      logAuditAction({ action: "UPDATE", module: "SIZE", entityId: id, entityLabel: sizeRecord.name, metadata: { reason: "deactivated (size is in use by products)" } }, request);
+
       return NextResponse.json({
         success: true,
         data: size,
@@ -275,6 +282,8 @@ export async function DELETE(request: NextRequest) {
       .eq('id', id);
 
     if (error) throw error;
+
+    logAuditAction({ action: "DELETE", module: "SIZE", entityId: id, entityLabel: sizeRecord.name }, request);
 
     return NextResponse.json({
       success: true,
