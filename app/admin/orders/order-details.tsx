@@ -872,8 +872,49 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
 
               {(currentOrder.status === 'Shipped' || currentOrder.status === 'Delivered') && (
                 <div className="bg-[#faf8f3] rounded-lg border border-[#e8e0d0]">
-                  <div className="p-6 border-b border-[#e8e0d0]">
+                  <div className="p-6 border-b border-[#e8e0d0] flex items-center justify-between">
                     <h2 className="text-lg font-semibold text-[#d4af37]">Tracking Information</h2>
+                    {currentOrder.courierProvider === 'lalamove' && currentOrder.status === 'Shipped' && (() => {
+                      const [syncing, setSyncing] = React.useState(false);
+                      const [syncMsg, setSyncMsg] = React.useState('');
+                      const handleSync = async () => {
+                        setSyncing(true);
+                        setSyncMsg('');
+                        try {
+                          const res = await fetch('/api/admin/orders/sync-lalamove', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ orderId: currentOrder.id }),
+                          });
+                          const data = await res.json();
+                          if (data.success) {
+                            setSyncMsg(data.message);
+                            if (data.orderStatus && data.orderStatus !== currentOrder.status) {
+                              handleStatusUpdate(data.orderStatus);
+                            }
+                          } else {
+                            setSyncMsg(data.error || 'Sync failed');
+                          }
+                        } catch {
+                          setSyncMsg('Network error');
+                        } finally {
+                          setSyncing(false);
+                        }
+                      };
+                      return (
+                        <div className="flex flex-col items-end gap-1">
+                          <button
+                            onClick={handleSync}
+                            disabled={syncing}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#d4af37] text-[#0a0a0a] rounded-lg hover:bg-[#d4af37]/90 disabled:opacity-50 transition-colors"
+                          >
+                            <RotateCcw size={13} className={syncing ? 'animate-spin' : ''} />
+                            {syncing ? 'Syncing…' : 'Sync Lalamove Status'}
+                          </button>
+                          {syncMsg && <p className="text-xs text-[#7a6a4a]">{syncMsg}</p>}
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div className="p-6 space-y-4">
                     <div>
