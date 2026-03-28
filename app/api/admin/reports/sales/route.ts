@@ -139,7 +139,7 @@ async function getSalesByCategory(
       products!order_items_product_id_fkey(
         name,
         price,
-        categories!products_category_id_fkey(
+        category!products_category_id_fkey(
           name
         )
       ),
@@ -169,7 +169,7 @@ async function getSalesByCategory(
   const categoryStats: Record<string, { productsSold: number; revenue: number; prices: number[] }> = {};
 
   filteredItems.forEach((item: any) => {
-    const categoryName = item.products?.categories?.name || 'Uncategorized';
+    const categoryName = item.products?.category?.name || 'Uncategorized';
     const quantity = Number(item.quantity) || 0;
     const revenue = Number(item.item_amount) || 0;
     const price = Number(item.products?.price) || 0;
@@ -222,7 +222,7 @@ async function getSalesByProduct(
         id,
         name,
         price,
-        categories!products_category_id_fkey(
+        category!products_category_id_fkey(
           name
         )
       ),
@@ -267,7 +267,7 @@ async function getSalesByProduct(
     if (!productStats[productId]) {
       productStats[productId] = {
         name: item.products.name,
-        category: item.products.categories?.name || 'Uncategorized',
+        category: item.products.category?.name || 'Uncategorized',
         quantitySold: 0,
         revenue: 0,
         price: Number(item.products.price) || 0,

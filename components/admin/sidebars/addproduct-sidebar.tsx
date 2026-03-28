@@ -44,7 +44,6 @@ const DEFAULT_OCCASION_OPTIONS = ["Everyday/Casual", "Work/Professional", "Gym/S
 const DEFAULT_WEATHER_OPTIONS = ["Warm", "Cool", "Rainy"];
 const DEFAULT_TOP_NOTES_OPTIONS = ["Fruity", "Floral", "Citrus", "Woody", "Spicy", "Herbal"];
 const DEFAULT_OTHER_OPTIONS = ["Best Sellers", "Assorted"];
-const PRICE_OPTIONS = [250, 350, 450];
 
 interface TagOptions {
   occasion: string[];
@@ -589,17 +588,15 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
                   <div className="flex items-center gap-3">
                     <div>
                       <label className="block text-xs text-[#7a6a4a] mb-1 uppercase">Price</label>
-                      <select
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
                         value={price}
-                        onChange={(e) => handleSizePriceChange(size, parseFloat(e.target.value))}
+                        onChange={(e) => handleSizePriceChange(size, parseFloat(e.target.value) || 0)}
                         className="w-24 p-2 text-sm bg-white border border-[#e8e0d0] rounded text-[#1c1810] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
-                      >
-                        {PRICE_OPTIONS.map(priceOption => (
-                          <option key={priceOption} value={priceOption} className="bg-[#faf8f3]">
-                            ₱{priceOption}
-                          </option>
-                        ))}
-                      </select>
+                        placeholder="0.00"
+                      />
                     </div>
                    
                     <div>
