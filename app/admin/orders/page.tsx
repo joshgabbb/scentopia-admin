@@ -824,14 +824,6 @@ const executeExport = () => {
       <span>Bulk edit</span>
     </button>
 
-    {/* Create Order Button */}
-    <button 
-      onClick={() => setShowCreateOrderModal(true)}
-      className="px-4 py-2 bg-[#d4af37] text-[#0a0a0a] hover:bg-[#d4af37]/90 transition-colors flex items-center space-x-2"
-    >
-      <Plus className="w-4 h-4" />
-      <span>Create order</span>
-    </button>
   </div>
   {/* ============================================ */}
       {/* ALL MODALS - ADD BEFORE CLOSING </div> */}
@@ -1160,93 +1152,6 @@ const executeExport = () => {
         </div>
       )}
 
-      {/* CREATE ORDER MODAL */}
-      {showCreateOrderModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-[#faf8f3] border border-[#e8e0d0] p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold text-[#d4af37] mb-4">Create New Order</h2>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-[#7a6a4a] mb-2">Customer Email *</label>
-                <input
-                  type="email"
-                  value={newOrder.customerEmail}
-                  onChange={(e) => setNewOrder({ ...newOrder, customerEmail: e.target.value })}
-                  placeholder="customer@example.com"
-                  className="w-full px-3 py-2 border border-[#e8e0d0] dark:border-[#2e2a1e] bg-white dark:bg-[#26231a] text-[#1c1810] dark:text-[#f0e8d8] placeholder-[#b0a080] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-[#7a6a4a] mb-2">Customer Name</label>
-                <input
-                  type="text"
-                  value={newOrder.customerName}
-                  onChange={(e) => setNewOrder({ ...newOrder, customerName: e.target.value })}
-                  placeholder="John Doe"
-                  className="w-full px-3 py-2 border border-[#e8e0d0] dark:border-[#2e2a1e] bg-white dark:bg-[#26231a] text-[#1c1810] dark:text-[#f0e8d8] placeholder-[#b0a080] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-[#7a6a4a] mb-2">Amount (PHP) *</label>
-                <input
-                  type="number"
-                  value={newOrder.amount}
-                  onChange={(e) => setNewOrder({ ...newOrder, amount: e.target.value })}
-                  placeholder="1000"
-                  className="w-full px-3 py-2 border border-[#e8e0d0] dark:border-[#2e2a1e] bg-white dark:bg-[#26231a] text-[#1c1810] dark:text-[#f0e8d8] placeholder-[#b0a080] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-[#7a6a4a] mb-2">Order Status</label>
-                <select
-                  value={newOrder.status}
-                  onChange={(e) => setNewOrder({ ...newOrder, status: e.target.value })}
-                  className="w-full px-3 py-2 border border-[#e8e0d0] dark:border-[#2e2a1e] bg-white dark:bg-[#26231a] text-[#1c1810] dark:text-[#f0e8d8] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
-                >
-                  <option value="Pending">Pending</option>
-                  <option value="Processing">Processing</option>
-                  <option value="Shipped">Shipped</option>
-                  <option value="Delivered">Delivered</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-[#7a6a4a] mb-2">Payment Method</label>
-                <select
-                  value={newOrder.paymentMethod}
-                  onChange={(e) => setNewOrder({ ...newOrder, paymentMethod: e.target.value })}
-                  className="w-full px-3 py-2 border border-[#e8e0d0] dark:border-[#2e2a1e] bg-white dark:bg-[#26231a] text-[#1c1810] dark:text-[#f0e8d8] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
-                >
-                  <option value="gcash">GCash</option>
-                  <option value="paymaya">PayMaya</option>
-                  <option value="card">Credit/Debit Card</option>
-                  <option value="cod">Cash on Delivery</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex justify-end space-x-3 mt-6">
-              <button
-                onClick={() => setShowCreateOrderModal(false)}
-                className="px-4 py-2 border border-[#e8e0d0] text-[#1c1810] hover:bg-[#d4af37]/10 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateOrder}
-                disabled={!newOrder.customerEmail || !newOrder.amount}
-                className="px-4 py-2 bg-[#d4af37] text-[#0a0a0a] hover:bg-[#d4af37]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Create Order
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div> {/* Don't forget to keep your closing tags */}
   
