@@ -814,15 +814,6 @@ const executeExport = () => {
   </div>
 
   <div className="flex items-center space-x-3">
-    {/* Bulk Edit Button */}
-    <button 
-      onClick={() => setShowBulkEditModal(true)}
-      disabled={selectedOrders.size === 0}
-      className="px-4 py-2 border border-[#e8e0d0] text-[#1c1810] hover:bg-[#d4af37]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
-    >
-      <Edit className="w-4 h-4" />
-      <span>Bulk edit</span>
-    </button>
 
   </div>
   {/* ============================================ */}
@@ -1092,65 +1083,6 @@ const executeExport = () => {
         );
       })()}
 
-      {/* BULK EDIT MODAL */}
-      {showBulkEditModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-[#faf8f3] border border-[#e8e0d0] p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold text-[#d4af37] mb-4">
-              Bulk Edit ({selectedOrders.size} orders)
-            </h2>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-[#7a6a4a] mb-2">Update Order Status</label>
-                <select
-                  value={bulkAction.updateStatus}
-                  onChange={(e) => setBulkAction({ ...bulkAction, updateStatus: e.target.value })}
-                  className="w-full px-3 py-2 border border-[#e8e0d0] dark:border-[#2e2a1e] bg-white dark:bg-[#26231a] text-[#1c1810] dark:text-[#f0e8d8] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
-                >
-                  <option value="">Don't change</option>
-                  <option value="Pending">Pending</option>
-                  <option value="Processing">Processing</option>
-                  <option value="To Ship">To Ship</option>
-                  <option value="Shipped">Shipped</option>
-                  <option value="Delivered">Delivered</option>
-                  <option value="Cancelled">Cancelled</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-[#7a6a4a] mb-2">Update Payment Status</label>
-                <select
-                  value={bulkAction.updatePaymentStatus}
-                  onChange={(e) => setBulkAction({ ...bulkAction, updatePaymentStatus: e.target.value })}
-                  className="w-full px-3 py-2 border border-[#e8e0d0] dark:border-[#2e2a1e] bg-white dark:bg-[#26231a] text-[#1c1810] dark:text-[#f0e8d8] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
-                >
-                  <option value="">Don't change</option>
-                  <option value="paid">Paid</option>
-                  <option value="pending">Pending</option>
-                  <option value="failed">Failed</option>
-                  <option value="refunded">Refunded</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex justify-end space-x-3 mt-6">
-              <button
-                onClick={() => setShowBulkEditModal(false)}
-                className="px-4 py-2 border border-[#e8e0d0] text-[#1c1810] hover:bg-[#d4af37]/10 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleBulkEdit}
-                className="px-4 py-2 bg-[#d4af37] text-[#0a0a0a] hover:bg-[#d4af37]/90 transition-colors"
-              >
-                Update Orders
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
 
     </div> {/* Don't forget to keep your closing tags */}
