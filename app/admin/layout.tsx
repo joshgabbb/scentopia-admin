@@ -38,6 +38,7 @@ import {
   X as XIcon,
   RotateCcw,
   Ticket,
+  PackageCheck,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import logo from "@/public/assets/images/general/stp-transparent-logo-light.png";
@@ -138,6 +139,13 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const [isRefundBellOpen,  setIsRefundBellOpen]  = useState(false);
   const refundBellRef = useRef<HTMLDivElement>(null);
 
+  // ── Delivery notification bell ────────────────────────────────────────
+  type DeliveryBellItem = { id: string; orderId: string; orderNumber: string | null; userName: string; amount: number; deliveredAt: string };
+  const [deliveryBellCount,   setDeliveryBellCount]   = useState(0);
+  const [deliveryBellItems,   setDeliveryBellItems]   = useState<DeliveryBellItem[]>([]);
+  const [isDeliveryBellOpen,  setIsDeliveryBellOpen]  = useState(false);
+  const deliveryBellRef = useRef<HTMLDivElement>(null);
+
   const fetchBellAlerts = useCallback(async () => {
     try {
       const res    = await fetch("/api/admin/alerts/bell");
@@ -193,6 +201,23 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval);
   }, [fetchRefundBell]);
 
+  const fetchDeliveryBell = useCallback(async () => {
+    try {
+      const res    = await fetch("/api/admin/orders/delivered-bell");
+      const result = await res.json();
+      setDeliveryBellCount(result.count ?? 0);
+      setDeliveryBellItems(result.items ?? []);
+    } catch {
+      // silent
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDeliveryBell();
+    const interval = setInterval(fetchDeliveryBell, 60_000);
+    return () => clearInterval(interval);
+  }, [fetchDeliveryBell]);
+
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
   // refundBellRef declared above with state
@@ -247,6 +272,9 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
       if (refundBellRef.current && !refundBellRef.current.contains(event.target as Node)) {
         setIsRefundBellOpen(false);
       }
+      if (deliveryBellRef.current && !deliveryBellRef.current.contains(event.target as Node)) {
+        setIsDeliveryBellOpen(false);
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -260,6 +288,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
         setIsUserMenuOpen(false);
         setIsNotificationsOpen(false);
         setIsRefundBellOpen(false);
+        setIsDeliveryBellOpen(false);
       }
     };
 
@@ -694,6 +723,92 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                   )}
                 </div>
 
+                {/* Delivery Notification Bell */}
+                <div className="relative" ref={deliveryBellRef}>
+                  <button
+                    onClick={() => {
+                      setIsDeliveryBellOpen(!isDeliveryBellOpen);
+                      setIsNotificationsOpen(false);
+                      setIsRefundBellOpen(false);
+                      setIsUserMenuOpen(false);
+                    }}
+                    className={`relative p-2 ${themeClasses.hoverBg} transition-colors duration-150 rounded-md active:scale-95 ${themeClasses.text}`}
+                    title="Delivered orders"
+                  >
+                    <PackageCheck className="w-5 h-5" />
+                    {deliveryBellCount > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 flex items-center justify-center rounded-full text-[10px] font-bold text-white leading-none bg-green-500">
+                        {deliveryBellCount > 99 ? "99+" : deliveryBellCount}
+                      </span>
+                    )}
+                  </button>
+
+                  {isDeliveryBellOpen && (
+                    <div className={`absolute right-0 mt-2 w-80 ${themeClasses.bgSecondary} border ${themeClasses.border} shadow-xl z-50`}>
+                      <div className={`px-4 py-3 border-b ${themeClasses.border} flex items-center justify-between`}>
+                        <h3 className={`text-sm font-semibold ${themeClasses.accent}`}>Delivered Orders</h3>
+                        {deliveryBellCount > 0 && (
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">
+                            {deliveryBellCount} in last 48h
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="max-h-72 overflow-y-auto">
+                        {deliveryBellItems.length === 0 ? (
+                          <div className="px-4 py-8 text-center">
+                            <PackageCheck className={`w-8 h-8 mx-auto mb-2 ${themeClasses.textMuted} opacity-40`} />
+                            <p className={`text-sm ${themeClasses.textMuted}`}>No deliveries in the last 48 hours</p>
+                          </div>
+                        ) : (
+                          deliveryBellItems.map((item) => (
+                            <button
+                              key={item.id}
+                              onClick={() => {
+                                router.push("/admin/orders");
+                                setIsDeliveryBellOpen(false);
+                              }}
+                              className={`w-full text-left px-4 py-3 bg-transparent hover:bg-[#f5f0e8] border-b ${themeClasses.border} last:border-b-0 transition-colors`}
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                                  <PackageCheck className="w-4 h-4 text-green-600" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className={`text-sm font-medium ${themeClasses.text} truncate`}>{item.userName}</p>
+                                  <p className="text-xs text-[#7a6a4a] mt-0.5 truncate">
+                                    {item.orderNumber ? `Order #${item.orderNumber}` : `Order ${item.orderId.slice(0, 8)}…`}
+                                  </p>
+                                  <p className="text-xs font-semibold text-green-700 mt-0.5">₱{item.amount.toFixed(2)} · Delivered</p>
+                                </div>
+                              </div>
+                            </button>
+                          ))
+                        )}
+                      </div>
+
+                      <div className={`px-4 py-3 border-t ${themeClasses.border} flex items-center gap-2`}>
+                        <button
+                          onClick={() => {
+                            router.push("/admin/orders");
+                            setIsDeliveryBellOpen(false);
+                          }}
+                          className={`flex-1 text-sm ${themeClasses.accent} hover:opacity-80 text-center font-medium`}
+                        >
+                          View all orders
+                        </button>
+                        <button
+                          onClick={() => { fetchDeliveryBell(); setIsDeliveryBellOpen(false); }}
+                          className={`p-1.5 ${themeClasses.textMuted} hover:${themeClasses.text} transition-colors`}
+                          title="Refresh"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* User Menu */}
                 <div className="relative" ref={userMenuRef}>
                   <button
@@ -701,6 +816,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                       setIsUserMenuOpen(!isUserMenuOpen);
                       setIsNotificationsOpen(false);
                       setIsRefundBellOpen(false);
+                      setIsDeliveryBellOpen(false);
                     }}
                     className={`w-8 h-8 ${themeClasses.accentBg} rounded-full flex items-center justify-center hover:opacity-80 transition-all duration-150 cursor-pointer active:scale-95`}
                   >

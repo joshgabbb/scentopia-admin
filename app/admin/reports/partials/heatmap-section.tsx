@@ -104,7 +104,7 @@ export default function HeatmapSection({ data: propData }: HeatmapSectionProps) 
   const getColorForValue = useCallback((value: number) => {
     const { lowThreshold, highThreshold } = statistics;
     if (value > highThreshold) return "#ef4444"; // Red - high orders
-    if (value > lowThreshold) return "#f97316";  // Orange - medium orders
+    if (value > lowThreshold) return "#3b82f6";  // Blue - mild orders
     return "#22c55e";                             // Green - low orders
   }, [statistics]);
 
@@ -274,7 +274,7 @@ export default function HeatmapSection({ data: propData }: HeatmapSectionProps) 
                   Low (0–{statistics.lowThreshold})
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-orange-500 inline-block" />
+                  <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
                   Mid ({statistics.lowThreshold + 1}–{statistics.highThreshold})
                 </span>
                 <span className="flex items-center gap-1">

@@ -19,14 +19,16 @@ export async function GET(request: NextRequest) {
       ? (() => { const d = new Date(dateTo); d.setDate(d.getDate() + 1); return d.toISOString(); })()
       : null;
 
-    // ── 1. Stock movements (admin IN / OUT) ─────────────────────────────────
+    // ── 1. Stock movements (admin IN / OUT — excluding purchase-sourced OUT) ──
     let stockMovements: any[] = [];
 
     if (typeFilter === "all" || typeFilter === "IN" || typeFilter === "OUT") {
       let q = supabase
         .from("stock_movements")
         .select(`id, product_id, size, type, quantity, previous_stock, new_stock, reason, remarks, created_by, created_at, products!inner(name, images)`)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        // Exclude purchase-sourced OUT entries — they show under PURCHASE tab
+        .not("reason", "like", "Purchase – Order #%");
 
       if (productId) q = q.eq("product_id", productId);
       if (typeFilter === "IN" || typeFilter === "OUT") q = q.eq("type", typeFilter);
@@ -35,6 +37,28 @@ export async function GET(request: NextRequest) {
 
       const { data } = await q;
       stockMovements = data || [];
+    }
+
+    // ── 1b. Purchase stock movements (for enriching PURCHASE rows) ───────────
+    // Keyed by "productId|size|orderId-prefix" for fast lookup
+    let purchaseMovementsMap: Record<string, { previousStock: number; newStock: number }> = {};
+
+    if (typeFilter === "all" || typeFilter === "PURCHASE") {
+      const { data: purchaseMoves } = await supabase
+        .from("stock_movements")
+        .select("product_id, size, quantity, previous_stock, new_stock, reason")
+        .like("reason", "Purchase – Order #%");
+
+      if (purchaseMoves) {
+        for (const m of purchaseMoves) {
+          // reason = "Purchase – Order #ABCD1234" — extract the order prefix
+          const match = (m.reason as string).match(/Purchase – Order #([A-Z0-9]{8})/);
+          if (match) {
+            const key = `${m.product_id}|${m.size}|${match[1]}`;
+            purchaseMovementsMap[key] = { previousStock: m.previous_stock, newStock: m.new_stock };
+          }
+        }
+      }
     }
 
     // Resolve admin names
@@ -123,6 +147,10 @@ export async function GET(request: NextRequest) {
         const product = Array.isArray(p.products) ? p.products[0] : p.products;
         const order = Array.isArray(p.orders) ? p.orders[0] : p.orders;
         const customerName = order?.user_id ? (customerMap[order.user_id] || "Customer") : "Customer";
+        const orderPrefix = String(order?.id || "").slice(0, 8).toUpperCase();
+        // Look up before/after from stock_movements if recorded
+        const movKey = `${p.product_id}|${p.size}|${orderPrefix}`;
+        const mov = purchaseMovementsMap[movKey];
         return {
           id: `purchase-${p.id}`,
           source: "purchase" as const,
@@ -132,9 +160,9 @@ export async function GET(request: NextRequest) {
           size: p.size,
           type: "PURCHASE" as const,
           quantity: p.quantity,
-          previousStock: null,
-          newStock: null,
-          reason: `Order #${String(order?.id || "").slice(0, 8).toUpperCase()}`,
+          previousStock: mov?.previousStock ?? null,
+          newStock: mov?.newStock ?? null,
+          reason: `Order #${orderPrefix}`,
           remarks: null,
           createdBy: order?.user_id || null,
           createdByName: customerName,
