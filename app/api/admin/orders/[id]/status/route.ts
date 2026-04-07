@@ -82,6 +82,53 @@ export async function PATCH(
       // Non-critical, continue
     }
 
+    // Refund wallet if cancelled and payment was via wallet (non-critical)
+    if (status === 'Cancelled') {
+      try {
+        const { data: payments } = await supabase
+          .from('payments')
+          .select('payment_method, amount, user_id')
+          .eq('order_id', orderId);
+
+        const walletPayments = (payments ?? []).filter(
+          (p: any) => p.payment_method?.toLowerCase() === 'wallet'
+        );
+        const walletTotal = walletPayments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+        const userId = walletPayments[0]?.user_id;
+
+        if (walletTotal > 0 && userId) {
+          const { data: wallet } = await supabase
+            .from('wallets')
+            .select('id')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+          if (wallet?.id) {
+            const { data: txn } = await supabase
+              .from('wallet_transactions')
+              .insert({
+                wallet_id: wallet.id,
+                type: 'credit',
+                amount: walletTotal,
+                description: 'Refund for cancelled order',
+                status: 'pending',
+              })
+              .select('id')
+              .single();
+
+            if (txn?.id) {
+              await supabase
+                .from('wallet_transactions')
+                .update({ status: 'successful' })
+                .eq('id', txn.id);
+            }
+          }
+        }
+      } catch {
+        // Non-critical, continue
+      }
+    }
+
     // Send status update email (non-critical)
     try {
       await supabase.functions.invoke('send-status-email', {
