@@ -358,6 +358,8 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
   const [adminNote, setAdminNote] = useState('');
   const [syncingLalamove, setSyncingLalamove] = useState(false);
   const [syncLalamoveMsg, setSyncLalamoveMsg] = useState('');
+  const [walletRefunding, setWalletRefunding] = useState(false);
+  const [walletRefundMsg, setWalletRefundMsg] = useState('');
 
   useEffect(() => {
     setCurrentOrder(order);
@@ -429,6 +431,26 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
       setSyncLalamoveMsg('Network error');
     } finally {
       setSyncingLalamove(false);
+    }
+  };
+
+  const handleWalletRefund = async () => {
+    if (!currentOrder) return;
+    if (!confirm('Issue a wallet refund to the customer for this cancelled order?')) return;
+    setWalletRefunding(true);
+    setWalletRefundMsg('');
+    try {
+      const res = await fetch(`/api/admin/orders/${currentOrder.id}/wallet-refund`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setWalletRefundMsg(`✓ Refunded ₱${data.refundedAmount?.toFixed(2)} to customer wallet`);
+      } else {
+        setWalletRefundMsg(`✗ ${data.error}`);
+      }
+    } catch {
+      setWalletRefundMsg('✗ Network error');
+    } finally {
+      setWalletRefunding(false);
     }
   };
 
@@ -738,6 +760,24 @@ export default function OrderDetails({ order, isLoading, onBack }: OrderDetailsP
                         <p className="font-medium text-[#1c1810]">{formatDate(currentOrder.payment.paymentCreatedAt)}</p>
                       </div>
                     </div>
+
+                    {/* Wallet refund button — only for cancelled wallet-paid orders */}
+                    {currentOrder.status === 'Cancelled' &&
+                      currentOrder.payment.paymentMethod?.toLowerCase() === 'wallet' && (
+                      <div className="pt-4 border-t border-[#e8e0d0]">
+                        <button
+                          onClick={handleWalletRefund}
+                          disabled={walletRefunding}
+                          className="flex items-center gap-2 px-4 py-2 bg-[#D4AF37] hover:bg-[#b8960c] text-white text-sm font-semibold rounded disabled:opacity-50 transition-colors"
+                        >
+                          <RotateCcw size={14} />
+                          {walletRefunding ? 'Refunding...' : 'Refund to Wallet'}
+                        </button>
+                        {walletRefundMsg && (
+                          <p className="mt-2 text-sm text-[#7a6a4a]">{walletRefundMsg}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
