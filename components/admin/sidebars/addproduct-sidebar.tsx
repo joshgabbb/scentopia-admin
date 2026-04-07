@@ -87,6 +87,7 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [newImageUrl, setNewImageUrl] = useState('');
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -282,14 +283,47 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
     }));
   };
 
+  const checkDuplicateProduct = async (): Promise<boolean> => {
+    const res = await fetch(`/api/admin/products?search=${encodeURIComponent(formData.name.trim())}&limit=100`);
+    if (!res.ok) throw new Error('Could not reach products API');
+    const result = await res.json();
+
+    // API returns { success, data: { products: [...], ... } }
+    const products: Product[] = result?.data?.products ?? [];
+    if (products.length === 0) return false;
+
+    const normalize = (arr: string[]) => [...arr].sort().join('|').toLowerCase();
+    const formSizes = Object.keys(formData.sizes).sort().join('|').toLowerCase();
+    const formName  = formData.name.trim().toLowerCase();
+    const formDesc  = formData.description.trim().toLowerCase();
+
+    for (const p of products) {
+      if ((p.name || '').toLowerCase() !== formName) continue;
+
+      const descMatch  = (p.description || '').trim().toLowerCase() === formDesc;
+      const typeMatch  = (p.perfumeType || '') === formData.perfumeType;
+      const catMatch   = (p.category?.id || '') === (formData.categoryId || '');
+      const sizesMatch = Object.keys(p.sizes || {}).sort().join('|').toLowerCase() === formSizes;
+      const tagsMatch  =
+        normalize(p.occasionsTags    || []) === normalize(formData.occasionsTags)    &&
+        normalize(p.weatherTags      || []) === normalize(formData.weatherTags)      &&
+        normalize(p.topNotesTags     || []) === normalize(formData.topNotesTags)     &&
+        normalize(p.otherOptionsTags || []) === normalize(formData.otherOptionsTags);
+
+      if (descMatch && typeMatch && catMatch && sizesMatch && tagsMatch) return true;
+    }
+    return false;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-   
+    setDuplicateWarning(null);
+
     if (!formData.name.trim()) {
       alert('Product name is required');
       return;
     }
-   
+
     if (!formData.description.trim()) {
       alert('Product description is required');
       return;
@@ -297,6 +331,22 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
 
     if (Object.keys(formData.sizes).length === 0) {
       alert('Please add at least one size with pricing');
+      return;
+    }
+
+    // Check for exact duplicate before uploading/submitting
+    try {
+      const isDuplicate = await checkDuplicateProduct();
+      if (isDuplicate) {
+        setDuplicateWarning(
+          'A product with the exact same name, description, perfume type, category, sizes, and tags already exists. Please review the existing product or change at least one detail.'
+        );
+        return;
+      }
+    } catch (err) {
+      setDuplicateWarning(
+        `Duplicate check failed: ${err instanceof Error ? err.message : 'Please try again.'}`
+      );
       return;
     }
 
@@ -686,6 +736,24 @@ export default function AddProduct({ onClose, onProductAdd }: AddProductProps) {
         </div>
         <div className="h-[30px]" />
       </form>
+
+      {/* Duplicate product warning */}
+      {duplicateWarning && (
+        <div className="flex-shrink-0 mx-0 mb-0 px-0 pt-3">
+          <div className="flex items-start gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-lg">
+            <svg className="w-5 h-5 text-red-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-red-700">Duplicate Product Detected</p>
+              <p className="text-xs text-red-600 mt-0.5">{duplicateWarning}</p>
+            </div>
+            <button type="button" onClick={() => setDuplicateWarning(null)} className="text-red-400 hover:text-red-600">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Action Buttons */}
       <div className="flex-shrink-0 pt-4 border-t border-[#e8e0d0] flex justify-end gap-3 bg-white">
