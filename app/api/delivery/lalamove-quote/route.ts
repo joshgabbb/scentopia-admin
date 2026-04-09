@@ -75,12 +75,12 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('[lalamove-quote] Error:', error);
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[lalamove-quote] Error:', msg);
     return NextResponse.json(
       {
         success: false,
-        error: 'Failed to get delivery quote',
-        details: error instanceof Error ? error.message : 'Unknown error',
+        error: msg,
       },
       { status: 500 }
     );
