@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
       item: {
         quantity: '1',
         weight: 'LESS_THAN_3KG',
-        categories: ['PARCEL'],
+        categories: ['FOOD_DELIVERY'],
         handlingInstructions: ['KEEP_UPRIGHT'],
       },
     };
