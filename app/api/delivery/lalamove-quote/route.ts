@@ -5,11 +5,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { LalamoveService } from '@/lib/lalamove-service';
 
 export async function POST(request: NextRequest) {
+  console.log('[lalamove-quote] POST called at', new Date().toISOString());
   try {
     const body = await request.json();
+    console.log('[lalamove-quote] Request body:', JSON.stringify(body));
     const { deliveryLat, deliveryLng, deliveryAddress } = body;
 
     if (!deliveryLat || !deliveryLng || !deliveryAddress) {
+      console.error('[lalamove-quote] Missing fields:', { deliveryLat, deliveryLng, deliveryAddress });
       return NextResponse.json(
         { success: false, error: 'deliveryLat, deliveryLng, and deliveryAddress are required' },
         { status: 400 }
@@ -19,6 +22,7 @@ export async function POST(request: NextRequest) {
     const lat = parseFloat(deliveryLat);
     const lng = parseFloat(deliveryLng);
     if (isNaN(lat) || isNaN(lng)) {
+      console.error('[lalamove-quote] Invalid coordinates:', deliveryLat, deliveryLng);
       return NextResponse.json(
         { success: false, error: 'Invalid coordinates' },
         { status: 400 }
@@ -30,6 +34,9 @@ export async function POST(request: NextRequest) {
     const storeLng = parseFloat(process.env.LALAMOVE_STORE_LNG || '121.1762');
     const storeAddress = process.env.LALAMOVE_STORE_ADDRESS
       || 'Block 1 Lot 67, San Jose Heights, Brgy. San Jose, Antipolo City, Rizal';
+
+    console.log('[lalamove-quote] Store:', storeLat, storeLng, storeAddress);
+    console.log('[lalamove-quote] Delivery:', lat, lng, deliveryAddress);
 
     const lalamove = new LalamoveService();
 
@@ -54,9 +61,12 @@ export async function POST(request: NextRequest) {
       },
     };
 
+    console.log('[lalamove-quote] Calling Lalamove getQuotation...');
     const quotationResult = await lalamove.getQuotation(quotationRequest);
+    console.log('[lalamove-quote] Quotation result:', JSON.stringify(quotationResult));
 
     if (!quotationResult?.data?.quotationId) {
+      console.error('[lalamove-quote] No quotationId in response:', JSON.stringify(quotationResult));
       return NextResponse.json(
         { success: false, error: 'Failed to get quotation from Lalamove' },
         { status: 400 }
@@ -67,6 +77,7 @@ export async function POST(request: NextRequest) {
     const price = priceBreakdown?.total ?? priceBreakdown?.base ?? '0';
     const currency = priceBreakdown?.currency ?? 'PHP';
 
+    console.log('[lalamove-quote] Success — price:', price, currency);
     return NextResponse.json({
       success: true,
       price: parseFloat(price),
@@ -75,12 +86,12 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('[lalamove-quote] Error:', error);
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[lalamove-quote] Error:', msg);
     return NextResponse.json(
       {
         success: false,
-        error: 'Failed to get delivery quote',
-        details: error instanceof Error ? error.message : 'Unknown error',
+        error: msg,
       },
       { status: 500 }
     );
