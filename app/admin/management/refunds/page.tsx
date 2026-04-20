@@ -17,6 +17,7 @@ interface RefundRecord {
   reason: string;
   description: string | null;
   image_url: string | null;
+  video_url: string | null;
   amount: number;
   status: "Pending" | "Approved" | "Declined";
   admin_note: string | null;
@@ -517,8 +518,35 @@ export default function RefundsPage() {
               )}
 
               <div>
-                <p className={`text-xs font-semibold uppercase tracking-wider ${themeClasses.textMuted} mb-2`}>Attached Image</p>
-                {selectedRefund.image_url ? (
+                <p className={`text-xs font-semibold uppercase tracking-wider ${themeClasses.textMuted} mb-2`}>Unboxing Video</p>
+                {selectedRefund.video_url ? (
+                  <div>
+                    {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                    <video
+                      src={selectedRefund.video_url}
+                      controls
+                      className="w-full rounded-sm border border-[#e8e0d0] max-h-64 bg-black"
+                    />
+                    <a
+                      href={selectedRefund.video_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-xs text-[#8B6914] mt-1 hover:underline"
+                    >
+                      <ExternalLink size={12} /> Open video in new tab
+                    </a>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-sm">
+                    <AlertTriangle size={14} className="text-amber-500 shrink-0" />
+                    <p className="text-xs text-amber-700">No unboxing video attached — evidence may be insufficient to approve</p>
+                  </div>
+                )}
+              </div>
+
+              {selectedRefund.image_url && (
+                <div>
+                  <p className={`text-xs font-semibold uppercase tracking-wider ${themeClasses.textMuted} mb-2`}>Attached Photo</p>
                   <a href={selectedRefund.image_url} target="_blank" rel="noopener noreferrer">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
@@ -530,13 +558,8 @@ export default function RefundsPage() {
                       <ExternalLink size={12} /> Open full image
                     </span>
                   </a>
-                ) : (
-                  <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-sm">
-                    <AlertTriangle size={14} className="text-amber-500 shrink-0" />
-                    <p className="text-xs text-amber-700">No photo attached — evidence may be insufficient to approve</p>
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
 
               {selectedRefund.admin_note && (
                 <div className={`${themeClasses.bgTertiary} border ${themeClasses.border} rounded-sm p-3`}>

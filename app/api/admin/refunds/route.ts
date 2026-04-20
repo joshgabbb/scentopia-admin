@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from("refunds")
       .select(
-        `id, order_id, user_id, reason, description, image_url, amount, status, admin_note, created_at, updated_at, expires_at,
+        `id, order_id, user_id, reason, description, image_url, video_url, amount, status, admin_note, created_at, updated_at, expires_at,
          orders!refunds_order_id_fkey(id, amount, order_status, email, contact_number)`
       )
       .order("created_at", { ascending: false });

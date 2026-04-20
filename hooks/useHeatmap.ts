@@ -34,7 +34,7 @@ export function useHeatmap(
       // Simple threshold coloring - you can customize these thresholds
       const color =
         value > 80 ? "#ef4444" :  // Red for high values
-        value > 50 ? "#f97316" :  // Orange for medium values
+        value > 50 ? "#3b82f6" :  // Blue for mild values
         "#22c55e";                // Green for low values
 
       colorFunctionRef.current!(id, color);
